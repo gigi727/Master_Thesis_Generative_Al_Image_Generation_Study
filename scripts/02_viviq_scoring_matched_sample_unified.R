@@ -47,8 +47,6 @@ if (!all(required_objects %in% ls())) {
 # =========================================================
 # 1) Ordnerstruktur für die VIVIQ-Auswertung            ===
 # =========================================================
-output_dir <- get_output_dir("02")
-
 project_root <- here::here()
 
 helper_script_candidates <- c(
@@ -69,6 +67,8 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 }
 
 source(helper_script_path, local = .GlobalEnv)
+
+output_dir <- get_output_dir("02")
 
 out_viviq_dir <- file.path(project_root, "data_output", "viviq")
 out_gt_dir <- file.path(out_viviq_dir, "gt_tables")

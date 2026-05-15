@@ -8,18 +8,18 @@
 # Methodenlogik des Ursprungsskripts bleibt unverändert.
 
 #####################################################################
-### Requested Pre-Survey descriptives from final anonymized dataset   ###
+### Requested Pre-Survey descriptives (cleaned, before merging)   ###
 #####################################################################
 
 ### DESCRIPTION ###
 
 # This script creates separate descriptive statistics tables for the
 # requested Pre-Survey variables on the cleaned Pre-Survey dataset
-# as contained in the final anonymized analysis dataset.
+# BEFORE merging with the Main Survey.
 #
 # It follows the project logic of the existing workflow:
-# - load only the final anonymized dataset
-# - reconstruct `pre_clean_full` from the Pre_Survey_* columns in that dataset
+# - source the cleaning script if required objects are missing
+# - use `pre_clean_full` as the cleaned Pre-Survey base dataset
 # - export each requested table separately as CSV and XLSX
 # - collect all results in one combined Excel workbook
 # - provide a question-level recommendation table for reporting
@@ -60,177 +60,41 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
+# The Pre-Survey analyses in this script must be based on the full cleaned
+# Pre-Survey dataset before matching. Therefore this script loads only the
+# anonymized Pre-Survey dataset from data_final/ and does not source scripts 01-03.
+
+loaded_datasets <- load_anonymized_analysis_datasets(
+  project_root = project_root,
+  require_pre = TRUE,
+  require_main = FALSE,
+  require_final = FALSE
+)
+
+pre_survey_dataset <- loaded_datasets$pre_survey_dataset
+pre_clean_full <- pre_survey_dataset
+pre_feature_lookup <- loaded_datasets$pre_feature_lookup
+
 out_base_dir   <- file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested")
 out_tables_dir <- file.path(out_base_dir, "tables")
 out_doc_dir    <- file.path(out_base_dir, "documentation")
 out_gt_dir     <- file.path(out_base_dir, "gt_tables")
 out_gt_html_dir <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir  <- file.path(out_gt_dir, "rtf")
-out_gt_doc_dir  <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
-  c(out_base_dir, out_tables_dir, out_doc_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir),
+  c(out_base_dir, out_tables_dir, out_doc_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
 
-# =========================================================
-# 2) Final anonymized dataset only                        ===
-# =========================================================
-
-# This public version does not load the cleaning workflow. It uses only
-# data_final/final_analysis_dataset_anonymized.rds and reconstructs the
-# Pre-Survey analysis base from the Pre_Survey_* variables contained there.
-# Therefore, the tables describe the final analysis sample, not unmatched
-# pre-merge cases that are absent from the final public dataset.
-
-
-# =========================================================
-# Final-Dataset-Only Bootstrap                            ===
-# =========================================================
-
-load_final_analysis_dataset_only <- function(project_root) {
-  if (exists("final_analysis_dataset", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset", envir = .GlobalEnv)
-  } else if (exists("final_analysis_dataset_anonymized", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset_anonymized", envir = .GlobalEnv)
-  } else {
-    rds_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
-      file.path(project_root, "final_analysis_dataset_anonymized.rds")
-    )
-    csv_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.csv"),
-      file.path(project_root, "final_analysis_dataset_anonymized.csv")
-    )
-
-    rds_path <- rds_candidates[file.exists(rds_candidates)][1]
-    csv_path <- csv_candidates[file.exists(csv_candidates)][1]
-
-    if (!is.na(rds_path)) {
-      ds <- readRDS(rds_path)
-      message("Confirmation: Loaded final anonymized dataset: ", rds_path)
-    } else if (!is.na(csv_path)) {
-      ds <- readr::read_csv(csv_path, show_col_types = FALSE)
-      message("Confirmation: Loaded final anonymized dataset: ", csv_path)
-    } else {
-      stop(
-        paste0(
-          "The final anonymized dataset could not be found. Expected one of these files:\n",
-          paste(c(rds_candidates, csv_candidates), collapse = "\n"),
-          "\nRun 13_create_final_anonymized_dataset.R locally once and commit/upload only the data_final file."
-        ),
-        call. = FALSE
-      )
-    }
-  }
-
-  if (!"participant_id" %in% names(ds)) {
-    stop("The final dataset must contain 'participant_id'.", call. = FALSE)
-  }
-
-  suspicious_identifier_cols <- names(ds)[
-    stringr::str_detect(
-      names(ds),
-      stringr::regex(
-        "email|e-mail|matched_email|IPAddress|IP Address|Recipient|ExternalReference|Location.*Latitude|Location.*Longitude|ResponseId|Case_Response_ID",
-        ignore_case = TRUE
-      )
-    )
-  ]
-
-  if (length(suspicious_identifier_cols) > 0) {
-    stop(
-      paste0(
-        "Potential direct identifiers are still present in the final dataset:\n",
-        paste(suspicious_identifier_cols, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
-
-  ds <- dplyr::as_tibble(ds)
-  final_analysis_dataset <<- ds
-  final_analysis_dataset_anonymized <<- ds
-  final_analysis_dataset_full <<- ds
-
-  pre_cols <- names(ds)[stringr::str_detect(names(ds), "^Pre_Survey_")]
-  main_cols <- names(ds)[stringr::str_detect(names(ds), "^Main_Survey_")]
-  viviq_cols <- names(ds)[stringr::str_detect(names(ds), "^viviq_|^VIVIQ|^Main_Survey_Q([4-9]|1[0-9])_score$")]
-  prompt_cols <- names(ds)[stringr::str_detect(names(ds), "^(R[123]_|Case_|Overall_|Sequence_|Prompt_|Coding_)")]
-
-  pre_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(pre_cols))
-
-  main_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(main_cols), dplyr::any_of(c(viviq_cols, prompt_cols)))
-
-  pre_raw <<- pre_clean_full
-  main_raw <<- main_clean_full
-
-  pre_feature_lookup <<- tibble::tibble(
-    variable_name = pre_cols,
-    question_text = pre_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  main_feature_lookup <<- tibble::tibble(
-    variable_name = main_cols,
-    question_text = main_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  matched_pre_main <<- ds %>%
-    dplyr::select(participant_id) %>%
-    dplyr::distinct()
-
-  matched_pre_main_valid <<- matched_pre_main
-
-  main_matched_viviq_final <<- ds %>%
-    dplyr::select(participant_id, dplyr::any_of(viviq_cols)) %>%
-    dplyr::distinct(participant_id, .keep_all = TRUE)
-
-  preview_removal_summary <<- tibble::tibble(
-    dataset = c("Pre_Survey", "Main_Survey"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode: raw cleaning counts are not available from the public anonymized dataset."
-  )
-
-  pre_n_overview <<- tibble::tibble(
-    data_cleaning_step = c("DC1_Finished_false_removed", "DC3_Consent_no_removed"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode"
-  )
-
-  main_n_overview <<- pre_n_overview
-
-  pre_n_duplicate_ip <<- tibble::tibble(dataset = "Pre_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-  main_n_duplicate_ip <<- tibble::tibble(dataset = "Main_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-
-  match_summary <<- tibble::tibble(
-    metric = c("final_public_cases", "final_public_participants"),
-    value = c(nrow(ds), dplyr::n_distinct(ds$participant_id)),
-    note = "Calculated from final anonymized dataset"
-  )
-
-  match_summary_valid_only <<- match_summary
-
-  config_pre <<- list(dataset_label = "Pre_Survey", final_dataset_only = TRUE)
-  config_main <<- list(dataset_label = "Main_Survey", final_dataset_only = TRUE)
-
-  invisible(ds)
-}
-
-final_analysis_dataset <- load_final_analysis_dataset_only(project_root)
-
+message("Confirmation: Pre-Survey analysis uses data_final/pre_survey_anonymized.rds (unmatched cleaned Pre-Survey cases).")
 
 # =========================================================
 # 3) Analysis base                                       ===
 # =========================================================
 
 pre_analysis <- pre_clean_full
-analysis_dataset_label <- "Pre-Survey variables in final anonymized analysis dataset"
+analysis_dataset_label <- "Pre-Survey cleaned before merging (anonymized, unmatched)"
 
 # =========================================================
 # 4) Helper functions                                    ===
@@ -1221,19 +1085,7 @@ purrr::iwalk(output_list, ~ save_table_outputs(.x, .y))
 
 writexl::write_xlsx(
   output_list,
-  path = file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx")
-)
-
-# Additional publication-oriented HTML/RTF exports for all tables.
-gt_manifest_06 <- save_table_collection_as_gt(
-  table_list = output_list,
-  out_gt_html_dir = out_gt_html_dir,
-  out_gt_rtf_dir = out_gt_rtf_dir,
-  out_gt_doc_dir = out_gt_doc_dir,
-  manifest_base_filename = "06_pre_survey_premerge_requested_gt_manifest",
-  index_title = "Pre-Survey requested descriptives - GT outputs",
-  index_intro = "This index links to publication-oriented HTML and RTF versions of all requested Pre-Survey descriptive tables.",
-  source_note = "Generated from data_final/final_analysis_dataset_anonymized."
+  path = file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx")
 )
 
 # =========================================================
@@ -1253,7 +1105,7 @@ console_summary <- c(
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt")
+  con = file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt")
 )
 
 # =========================================================
@@ -1277,20 +1129,14 @@ export_manifest <- purrr::imap_dfr(
     tibble(
       label = c(
         "Combined workbook",
-        "GT index",
-        "GT manifest",
         "Console summary"
       ),
       path = c(
-        file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx"),
-        file.path(out_gt_dir, "00_gt_index.html"),
-        file.path(out_gt_doc_dir, "06_pre_survey_premerge_requested_gt_manifest.csv"),
-        file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt")
+        file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx"),
+        file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt")
       ),
       notes = c(
         "Kombinierte Excel-Arbeitsmappe aller Outputs",
-        "Publikationsnahe HTML-/RTF-Tabellen",
-        "Manifest der publikationsnahen HTML-/RTF-Tabellen",
         "Konsolen- und Prüfzusammenfassung"
       )
     )
@@ -1302,13 +1148,13 @@ build_general_export_index(
   manifest = export_manifest,
   output_path = file.path(out_doc_dir, "00_export_index.html"),
   title_text = "Pre-Survey descriptives (pre-merge): Export index",
-  intro_text = "Dieser Unterindex bündelt die Tabellen- und Dokumentationsdateien des Skripts 06."
+  intro_text = "Dieser Unterindex bündelt die Tabellen- und Dokumentationsdateien des Skripts 07."
 )
 
 message("Confirmation: All requested pre-survey descriptive tables were exported successfully.")
 message("Individual CSV/XLSX tables: ", out_tables_dir)
-message("Combined workbook: ", file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx"))
-message("Console summary: ", file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt"))
+message("Combined workbook: ", file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx"))
+message("Console summary: ", file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt"))
 
 #####################################################################
 ### End of workflow                                               ###

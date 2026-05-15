@@ -561,129 +561,90 @@ get_output_dir <- function(script_id) {
   return(dir)
 }
 
-
 # =========================================================
-# 13) Publikationsnahe GT-Exporte für Research-Outputs     ===
+# 10) Public/anonymized analysis datasets                 ===
 # =========================================================
-# Diese Helper verändern keine Analyse- oder Tabellenmethodik.
-# Sie erzeugen aus bereits berechneten Tabellen zusätzliche HTML-/RTF-
-# Versionen, damit Skript 99 sie im Ordner "Output for Research" sammeln kann.
 
-sanitize_research_file_stem <- function(x) {
-  x <- as.character(x)
-  x <- stringr::str_replace_all(x, "[^A-Za-z0-9_\\-]+", "_")
-  x <- stringr::str_replace_all(x, "_+", "_")
-  x <- stringr::str_replace_all(x, "^_|_$", "")
-  ifelse(is.na(x) | x == "", "table", x)
-}
-
-coerce_table_for_gt <- function(x) {
-  if (inherits(x, "data.frame")) {
-    return(tibble::as_tibble(x))
-  }
-
-  if (inherits(x, "table")) {
-    return(as.data.frame(x))
-  }
-
-  if (is.matrix(x)) {
-    return(tibble::as_tibble(as.data.frame(x)))
-  }
-
-  if (inherits(x, "anova")) {
-    return(tibble::as_tibble(as.data.frame(x), rownames = "term"))
-  }
-
-  if (is.atomic(x) && !is.null(names(x))) {
-    return(tibble::tibble(name = names(x), value = as.character(x)))
-  }
-
-  NULL
-}
-
-save_table_collection_as_gt <- function(table_list,
-                                        out_gt_html_dir,
-                                        out_gt_rtf_dir,
-                                        out_gt_doc_dir = NULL,
-                                        manifest_base_filename = "00_gt_manifest",
-                                        index_title = "Formatted GT tables",
-                                        index_intro = "This index links to all formatted HTML and RTF tables.",
-                                        source_note = NULL) {
-  if (!requireNamespace("gt", quietly = TRUE)) {
-    stop("Package 'gt' is required for HTML/RTF table export.", call. = FALSE)
-  }
-
-  if (is.null(names(table_list)) || any(names(table_list) == "")) {
-    names(table_list) <- paste0("table_", seq_along(table_list))
-  }
-
-  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
-  dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
-
-  if (!is.null(out_gt_doc_dir)) {
-    dir.create(out_gt_doc_dir, recursive = TRUE, showWarnings = FALSE)
-  }
-
-  gt_manifest <- purrr::imap_dfr(
-    table_list,
-    function(tbl, object_name) {
-      df <- coerce_table_for_gt(tbl)
-
-      if (is.null(df)) {
-        return(tibble::tibble(
-          object_name = object_name,
-          html_file = NA_character_,
-          rtf_file = NA_character_,
-          note = "Skipped: object could not be converted to a tabular data frame."
-        ))
-      }
-
-      file_stem <- sanitize_research_file_stem(object_name)
-
-      gt_tbl <- make_gt_table_standard(
-        df = df,
-        title_text = stringr::str_replace_all(object_name, "_", " "),
-        subtitle_text = NULL,
-        source_note = source_note
-      )
-
-      saved <- save_gt_table(
-        gt_tbl = gt_tbl,
-        file_stem = file_stem,
-        out_gt_html_dir = out_gt_html_dir,
-        out_gt_rtf_dir = out_gt_rtf_dir
-      )
-
-      saved %>%
-        dplyr::mutate(note = "Publication-oriented GT export")
-    }
-  )
-
-  if (!is.null(out_gt_doc_dir)) {
-    save_table_outputs(
-      gt_manifest,
-      base_filename = manifest_base_filename,
-      out_dir = out_gt_doc_dir
-    )
-
-    build_simple_html_index(
-      manifest = gt_manifest,
-      output_path = file.path(dirname(out_gt_html_dir), "00_gt_index.html"),
-      title_text = index_title,
-      intro_text = index_intro
-    )
-
-    writeLines(
-      c(
-        paste0("GT HTML directory: ", out_gt_html_dir),
-        paste0("GT RTF directory: ", out_gt_rtf_dir),
-        "",
-        capture.output(print(gt_manifest))
+read_required_rds <- function(path, object_label = "RDS object") {
+  if (!file.exists(path)) {
+    stop(
+      paste0(
+        object_label, " could not be found at:\n", path,
+        "\nPlease run script 04_create_final_anonymized_dataset.R locally first, ",
+        "or place the anonymized dataset file in data_final/."
       ),
-      con = file.path(out_gt_doc_dir, paste0(manifest_base_filename, "_console_summary.txt"))
+      call. = FALSE
+    )
+  }
+  readRDS(path)
+}
+
+derive_feature_lookup_from_dataset <- function(df, survey_name = NA_character_) {
+  tibble::tibble(
+    survey = survey_name,
+    variable_name = names(df),
+    question_text = names(df)
+  )
+}
+
+load_feature_lookup_or_derive <- function(project_root,
+                                          file_stem,
+                                          df,
+                                          survey_name = NA_character_) {
+  rds_path <- file.path(project_root, "data_final", paste0(file_stem, ".rds"))
+  csv_path <- file.path(project_root, "data_final", paste0(file_stem, ".csv"))
+
+  if (file.exists(rds_path)) {
+    return(readRDS(rds_path))
+  }
+
+  if (file.exists(csv_path)) {
+    return(readr::read_csv(csv_path, show_col_types = FALSE))
+  }
+
+  derive_feature_lookup_from_dataset(df, survey_name = survey_name)
+}
+
+load_anonymized_analysis_datasets <- function(project_root = here::here(),
+                                              require_pre = FALSE,
+                                              require_main = FALSE,
+                                              require_final = TRUE) {
+  data_final_dir <- file.path(project_root, "data_final")
+
+  out <- list()
+
+  if (isTRUE(require_pre)) {
+    out$pre_survey_dataset <- read_required_rds(
+      file.path(data_final_dir, "pre_survey_anonymized.rds"),
+      "Pre-Survey anonymized dataset"
+    )
+    out$pre_feature_lookup <- load_feature_lookup_or_derive(
+      project_root,
+      "pre_feature_lookup_public",
+      out$pre_survey_dataset,
+      "Pre_Survey"
     )
   }
 
-  invisible(gt_manifest)
-}
+  if (isTRUE(require_main)) {
+    out$main_survey_dataset <- read_required_rds(
+      file.path(data_final_dir, "main_survey_anonymized.rds"),
+      "Main-Survey anonymized dataset"
+    )
+    out$main_feature_lookup <- load_feature_lookup_or_derive(
+      project_root,
+      "main_feature_lookup_public",
+      out$main_survey_dataset,
+      "Main_Survey"
+    )
+  }
 
+  if (isTRUE(require_final)) {
+    out$final_analysis_dataset <- read_required_rds(
+      file.path(data_final_dir, "final_analysis_dataset_anonymized.rds"),
+      "Final matched anonymized analysis dataset"
+    )
+  }
+
+  out
+}

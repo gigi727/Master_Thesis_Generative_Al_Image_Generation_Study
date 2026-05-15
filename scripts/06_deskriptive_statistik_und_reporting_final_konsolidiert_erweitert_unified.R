@@ -67,7 +67,7 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-output_dir <- get_output_dir("05")
+output_dir <- get_output_dir("06")
 
 out_desc_dir     <- file.path(project_root, "data_output", "descriptives")
 out_tables_dir   <- file.path(out_desc_dir, "tables")
@@ -102,157 +102,79 @@ purrr::walk(
 
 
 #####################################################################
-###      Finalen anonymisierten Datensatz laden                   ###
+###      Prüfung und Laden der benötigten Vorgänger-Skripte       ###
 #####################################################################
 
 ### BESCHREIBUNG ###
 
-# Dieses Skript lädt keine Rohdaten-, Cleaning-, Matching- oder VIVIQ-
-# Skripte mehr. Alle Analysen, Tabellen und Plots basieren auf genau einem
-# Datensatz: data_final/final_analysis_dataset_anonymized.rds.
-# Hilfsobjekte wie pre_clean_full, main_clean_full und Feature-Lookups
-# werden ausschließlich aus diesem finalen Datensatz rekonstruiert.
-
+# In diesem Abschnitt wird geprüft, ob die beiden vorgelagerten Skripte
+# vorhanden sind. Falls ja, werden sie explizit in die Global Environment
+# geladen, damit die dort erzeugten Objekte für das Reporting-Skript
+# sicher verfügbar sind. Anschließend wird geprüft, ob alle benötigten
+# Objekte tatsächlich vorhanden sind.
 
 # =========================================================
-# Final-Dataset-Only Bootstrap                            ===
+# 2) Benötigte Objekte definieren                        ===
 # =========================================================
 
-load_final_analysis_dataset_only <- function(project_root) {
-  if (exists("final_analysis_dataset", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset", envir = .GlobalEnv)
-  } else if (exists("final_analysis_dataset_anonymized", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset_anonymized", envir = .GlobalEnv)
-  } else {
-    rds_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
-      file.path(project_root, "final_analysis_dataset_anonymized.rds")
-    )
-    csv_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.csv"),
-      file.path(project_root, "final_analysis_dataset_anonymized.csv")
-    )
+# =========================================================
+# 2) Anonymisierte Analyse-Datensätze laden              ====
+# =========================================================
 
-    rds_path <- rds_candidates[file.exists(rds_candidates)][1]
-    csv_path <- csv_candidates[file.exists(csv_candidates)][1]
+# Dieses Reporting-Skript verwendet keine Rohdaten und keine Outputs aus 01-03.
+# Die Datensatzbasis ist explizit getrennt:
+# - Pre-Survey-Auswertungen: data_final/pre_survey_anonymized.rds
+# - Main-Survey-Auswertungen: data_final/main_survey_anonymized.rds
+# - gematchte / längsschnittliche Analysen: data_final/final_analysis_dataset_anonymized.rds
 
-    if (!is.na(rds_path)) {
-      ds <- readRDS(rds_path)
-      message("Confirmation: Loaded final anonymized dataset: ", rds_path)
-    } else if (!is.na(csv_path)) {
-      ds <- readr::read_csv(csv_path, show_col_types = FALSE)
-      message("Confirmation: Loaded final anonymized dataset: ", csv_path)
-    } else {
-      stop(
-        paste0(
-          "The final anonymized dataset could not be found. Expected one of these files:\n",
-          paste(c(rds_candidates, csv_candidates), collapse = "\n"),
-          "\nRun 13_create_final_anonymized_dataset.R locally once and commit/upload only the data_final file."
-        ),
-        call. = FALSE
-      )
-    }
-  }
+loaded_datasets <- load_anonymized_analysis_datasets(
+  project_root = project_root,
+  require_pre = TRUE,
+  require_main = TRUE,
+  require_final = TRUE
+)
 
-  if (!"participant_id" %in% names(ds)) {
-    stop("The final dataset must contain 'participant_id'.", call. = FALSE)
-  }
+pre_survey_dataset <- loaded_datasets$pre_survey_dataset
+main_survey_dataset <- loaded_datasets$main_survey_dataset
+final_analysis_dataset <- loaded_datasets$final_analysis_dataset
 
-  suspicious_identifier_cols <- names(ds)[
-    stringr::str_detect(
-      names(ds),
-      stringr::regex(
-        "email|e-mail|matched_email|IPAddress|IP Address|Recipient|ExternalReference|Location.*Latitude|Location.*Longitude|ResponseId|Case_Response_ID",
-        ignore_case = TRUE
-      )
-    )
-  ]
+pre_feature_lookup <- loaded_datasets$pre_feature_lookup
+main_feature_lookup <- loaded_datasets$main_feature_lookup
 
-  if (length(suspicious_identifier_cols) > 0) {
-    stop(
-      paste0(
-        "Potential direct identifiers are still present in the final dataset:\n",
-        paste(suspicious_identifier_cols, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
+# Namen für Kompatibilität mit der bestehenden Tabellenlogik.
+pre_clean_full <- pre_survey_dataset
+main_clean_full <- main_survey_dataset
+pre_raw <- pre_survey_dataset
+main_raw <- main_survey_dataset
+final_analysis_dataset_full <- final_analysis_dataset
 
-  ds <- dplyr::as_tibble(ds)
-  final_analysis_dataset <<- ds
-  final_analysis_dataset_anonymized <<- ds
-  final_analysis_dataset_full <<- ds
+# Dokumentationsobjekte ohne Zugriff auf private Cleaning-Logs.
+preview_removal_summary <- tibble(
+  dataset = c("Pre_Survey", "Main_Survey"),
+  n_kept = c(nrow(pre_survey_dataset), nrow(main_survey_dataset)),
+  note = "Anonymized cleaned dataset loaded from data_final/"
+)
 
-  pre_cols <- names(ds)[stringr::str_detect(names(ds), "^Pre_Survey_")]
-  main_cols <- names(ds)[stringr::str_detect(names(ds), "^Main_Survey_")]
-  viviq_cols <- names(ds)[stringr::str_detect(names(ds), "^viviq_|^VIVIQ|^Main_Survey_Q([4-9]|1[0-9])_score$")]
-  prompt_cols <- names(ds)[stringr::str_detect(names(ds), "^(R[123]_|Case_|Overall_|Sequence_|Prompt_|Coding_)")]
+pre_n_overview <- tibble(
+  data_cleaning_step = c("Loaded anonymized cleaned Pre-Survey dataset"),
+  n_kept = nrow(pre_survey_dataset)
+)
 
-  pre_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(pre_cols))
+main_n_overview <- tibble(
+  data_cleaning_step = c("Loaded anonymized cleaned Main-Survey dataset"),
+  n_kept = nrow(main_survey_dataset)
+)
 
-  main_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(main_cols), dplyr::any_of(c(viviq_cols, prompt_cols)))
+pre_followup_summary <- tibble(
+  category = c("Pre-Survey anonymized cleaned cases"),
+  n = nrow(pre_survey_dataset),
+  note = "Full cleaned Pre-Survey dataset before matching"
+)
 
-  pre_raw <<- pre_clean_full
-  main_raw <<- main_clean_full
+matched_pre_main <- final_analysis_dataset %>%
+  distinct(participant_id)
 
-  pre_feature_lookup <<- tibble::tibble(
-    variable_name = pre_cols,
-    question_text = pre_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  main_feature_lookup <<- tibble::tibble(
-    variable_name = main_cols,
-    question_text = main_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  matched_pre_main <<- ds %>%
-    dplyr::select(participant_id) %>%
-    dplyr::distinct()
-
-  matched_pre_main_valid <<- matched_pre_main
-
-  main_matched_viviq_final <<- ds %>%
-    dplyr::select(participant_id, dplyr::any_of(viviq_cols)) %>%
-    dplyr::distinct(participant_id, .keep_all = TRUE)
-
-  preview_removal_summary <<- tibble::tibble(
-    dataset = c("Pre_Survey", "Main_Survey"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode: raw cleaning counts are not available from the public anonymized dataset."
-  )
-
-  pre_n_overview <<- tibble::tibble(
-    data_cleaning_step = c("DC1_Finished_false_removed", "DC3_Consent_no_removed"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode"
-  )
-
-  main_n_overview <<- pre_n_overview
-
-  pre_n_duplicate_ip <<- tibble::tibble(dataset = "Pre_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-  main_n_duplicate_ip <<- tibble::tibble(dataset = "Main_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-
-  match_summary <<- tibble::tibble(
-    metric = c("final_public_cases", "final_public_participants"),
-    value = c(nrow(ds), dplyr::n_distinct(ds$participant_id)),
-    note = "Calculated from final anonymized dataset"
-  )
-
-  match_summary_valid_only <<- match_summary
-
-  config_pre <<- list(dataset_label = "Pre_Survey", final_dataset_only = TRUE)
-  config_main <<- list(dataset_label = "Main_Survey", final_dataset_only = TRUE)
-
-  invisible(ds)
-}
-
-final_analysis_dataset <- load_final_analysis_dataset_only(project_root)
+message("Confirmation: Script 06 uses only anonymized datasets from data_final/.")
 
 #####################################################################
 ###                    Hilfsfunktionen                            ###
@@ -293,17 +215,20 @@ pct <- function(x, base) {
 }
 
 summarise_raw_dataset <- function(df, cfg, dataset_label) {
+  finished_clean <- parse_finished_to_logical(df[[cfg$finished_var]])
+  consent_clean  <- as.character(df[[cfg$consent_var]])
+  email_clean    <- clean_email(df[[cfg$email_var]])
+
   tibble(
     dataset = dataset_label,
     n_cases = nrow(df),
     n_variables = ncol(df),
-    n_finished_true = NA_integer_,
-    n_finished_false_or_na = NA_integer_,
-    n_consent_yes = NA_integer_,
-    n_consent_no = NA_integer_,
-    n_email_available = NA_integer_,
-    n_valid_email = NA_integer_,
-    note = "Final-dataset-only mode: raw status, consent and email fields are not available in the public anonymized dataset."
+    n_finished_true = sum(finished_clean == TRUE, na.rm = TRUE),
+    n_finished_false_or_na = sum(is.na(finished_clean) | finished_clean != TRUE, na.rm = TRUE),
+    n_consent_yes = sum(consent_clean == cfg$consent_yes, na.rm = TRUE),
+    n_consent_no = sum(consent_clean == cfg$consent_no, na.rm = TRUE),
+    n_email_available = sum(!is.na(email_clean)),
+    n_valid_email = sum(is_valid_email(email_clean), na.rm = TRUE)
   )
 }
 
@@ -851,16 +776,21 @@ make_longitudinal_block_plot <- function(distribution_table, title_text, respons
 
 ### BESCHREIBUNG ###
 
-# Der Datensatz wurde bereits im Final-Dataset-Only Bootstrap geladen.
-# Ab hier wird ausschließlich final_analysis_dataset verwendet.
+# Ab diesem Punkt wird für die inhaltliche Ergebnisdarstellung ausschließlich
+# der konsolidierte finale Analyse-Datensatz verwendet. Dieser enthält bereits
+# die zusammengeführten Variablen aus Pre-Survey und Main-Survey sowie – falls
+# vorhanden – die ergänzten VIVIQ-Kennwerte.
 
 # =========================================================
 # 7) Konsolidierten Analyse-Datensatz setzen             ===
 # =========================================================
 
-final_analysis_dataset <- final_analysis_dataset_anonymized
+# The final matched dataset was loaded above from data_final/final_analysis_dataset_anonymized.rds.
+# It remains the basis for all matched, longitudinal, VIVIQ, prompt-coding and main-study analyses.
 
-participant_id_col <- "participant_id"
+id_col <- "participant_id"
+pre_id_col <- "pre_participant_id"
+main_id_col <- "main_participant_id"
 
 viviq_score_vars <- names(final_analysis_dataset)[
   stringr::str_detect(
@@ -941,72 +871,54 @@ main_q50_boxplot_data <- bind_rows(
 # 8) Übersichts- und Reportingtabellen erstellen         ===
 # =========================================================
 
-pre_raw_analysis_start <- pre_raw
-main_raw_analysis_start <- main_raw
-
-raw_dataset_overview <- bind_rows(
-  summarise_raw_dataset(pre_raw_analysis_start, config_pre, "Pre_Survey"),
-  summarise_raw_dataset(main_raw_analysis_start, config_main, "Main_Survey")
+raw_dataset_overview <- tibble(
+  dataset = c("Pre_Survey", "Main_Survey", "Final matched dataset"),
+  n_cases = c(nrow(pre_survey_dataset), nrow(main_survey_dataset), nrow(final_analysis_dataset)),
+  n_variables = c(ncol(pre_survey_dataset), ncol(main_survey_dataset), ncol(final_analysis_dataset)),
+  data_source = c(
+    "data_final/pre_survey_anonymized.rds",
+    "data_final/main_survey_anonymized.rds",
+    "data_final/final_analysis_dataset_anonymized.rds"
+  )
 )
 
-cleaning_flow_table <- bind_rows(
-  tibble(
-    dataset = "Pre_Survey",
-    phase = c(
-      "Analysis start",
-      "After exclusion: incomplete",
-      "Final cleaned after consent"
-    ),
-    n_cases = c(
-      preview_removal_summary$n_kept[preview_removal_summary$dataset == "Pre_Survey"],
-      pre_n_overview$n_kept[pre_n_overview$data_cleaning_step == "DC1_Finished_false_removed"],
-      pre_n_overview$n_kept[pre_n_overview$data_cleaning_step == "DC3_Consent_no_removed"]
-    )
+cleaning_flow_table <- tibble(
+  dataset = c("Pre_Survey", "Main_Survey", "Final matched dataset"),
+  phase = c(
+    "Anonymized cleaned Pre-Survey dataset loaded",
+    "Anonymized cleaned Main-Survey dataset loaded",
+    "Anonymized matched final dataset loaded"
   ),
-  tibble(
-    dataset = "Main_Survey",
-    phase = c(
-      "Analysis start",
-      "After exclusion: incomplete",
-      "Final cleaned after consent"
-    ),
-    n_cases = c(
-      preview_removal_summary$n_kept[preview_removal_summary$dataset == "Main_Survey"],
-      main_n_overview$n_kept[main_n_overview$data_cleaning_step == "DC1_Finished_false_removed"],
-      main_n_overview$n_kept[main_n_overview$data_cleaning_step == "DC3_Consent_no_removed"]
-    )
-  )
-) %>%
-  group_by(dataset) %>%
-  mutate(
-    base_n = first(n_cases),
-    percent_of_analysis_start = round(pct(n_cases, base_n), 1)
-  ) %>%
-  ungroup()
+  n_cases = c(nrow(pre_survey_dataset), nrow(main_survey_dataset), nrow(final_analysis_dataset)),
+  percent_of_analysis_start = 100
+)
 
 key_dataset_overview <- tibble(
   dataset = c(
-    "Final anonymized analysis dataset",
-    "Unique participants in final dataset",
-    "Fully completed VIVIQ in the final dataset"
+    "Pre-Survey cleaned anonymized dataset before matching",
+    "Main-Survey cleaned anonymized dataset before matching",
+    "Final matched anonymized dataset with VIVIQ and prompt coding",
+    "Fully completed VIVIQ in the final matched dataset"
   ),
   n_cases = c(
+    nrow(pre_survey_dataset),
+    nrow(main_survey_dataset),
     nrow(final_analysis_dataset),
-    dplyr::n_distinct(final_analysis_dataset$participant_id, na.rm = TRUE),
     sum(!is.na(final_analysis_dataset$viviq_total_score))
-  ),
-  note = "Counts are calculated from data_final/final_analysis_dataset_anonymized only."
+  )
 )
 
 email_matching_overview <- tibble(
   group = c(
-    "Final dataset: cases with participant_id",
-    "Final dataset: unique participant_id values",
-    "Final dataset: VIVIQ available",
-    "Final dataset: VIVIQ complete"
+    "Pre-Survey anonymized cleaned cases",
+    "Main-Survey anonymized cleaned cases",
+    "Final matched anonymized cases",
+    "Final matched dataset: VIVIQ available",
+    "Final matched dataset: VIVIQ complete"
   ),
   n = c(
-    sum(!is.na(final_analysis_dataset$participant_id)),
+    nrow(pre_survey_dataset),
+    nrow(main_survey_dataset),
     dplyr::n_distinct(final_analysis_dataset$participant_id, na.rm = TRUE),
     sum(!is.na(final_analysis_dataset$viviq_mean_score)),
     sum(!is.na(final_analysis_dataset$viviq_total_score))
@@ -1033,8 +945,7 @@ viviq_item_summary_table <- tibble(variable = viviq_score_vars) %>%
 final_analysis_overview <- tibble(
   n_cases = nrow(final_analysis_dataset),
   n_variables = ncol(final_analysis_dataset),
-  n_participant_id_nonmissing = sum(!is.na(final_analysis_dataset$participant_id)),
-  n_unique_participants = dplyr::n_distinct(final_analysis_dataset$participant_id, na.rm = TRUE),
+  n_participants = dplyr::n_distinct(final_analysis_dataset$participant_id, na.rm = TRUE),
   n_viviq_mean_nonmissing = sum(!is.na(final_analysis_dataset$viviq_mean_score)),
   n_viviq_total_nonmissing = sum(!is.na(final_analysis_dataset$viviq_total_score))
 )
@@ -1069,20 +980,18 @@ unmapped_target_words <- final_analysis_dataset %>%
 # 8b) Erweiterte Deskriptivtabellen erstellen            ===
 # =========================================================
 
-participant_ids <- final_analysis_dataset %>%
-  transmute(participant_id) %>%
-  distinct()
+# Pre-Survey-only descriptives are based on the full cleaned anonymized Pre-Survey dataset,
+# not on the matched final sample.
+pre_desc_base <- pre_survey_dataset
 
-pre_desc_base <- final_analysis_dataset %>%
-  select(participant_id, starts_with("Pre_Survey_"))
+pre_duration_base <- if ("Pre_Survey_Q3" %in% names(pre_survey_dataset)) {
+  pre_survey_dataset %>% filter(Pre_Survey_Q3 == "Yes")
+} else {
+  pre_survey_dataset
+}
 
-pre_duration_base <- pre_desc_base %>%
-  filter(if ("Pre_Survey_Q3" %in% names(.)) Pre_Survey_Q3 == "Yes" else TRUE)
-
-main_desc_base <- final_analysis_dataset %>%
-  select(participant_id, starts_with("Main_Survey_"), starts_with("viviq_"), matches("^Main_Survey_Q([4-9]|1[0-9])_score$"))
-
-
+# Main-Survey-only descriptives are based on the full cleaned anonymized Main-Survey dataset.
+main_desc_base <- main_survey_dataset
 
 if ("Pre_Survey_Q28" %in% names(pre_desc_base)) {
   pre_desc_base <- pre_desc_base %>%
@@ -1105,7 +1014,7 @@ survey_duration_summary_table <- bind_rows(
     main_desc_base,
     "Main_Survey_Duration",
     "Main Survey duration",
-    "Main-Matched"
+    "Main-Survey cleaned"
   )
 )
 selected_variables <- tribble(
@@ -1157,25 +1066,25 @@ selected_variables_checked <- bind_rows(
 
 pre_numeric_desc <- selected_variables_checked %>%
   filter(survey == "Pre", table_type == "numeric") %>%
-  mutate(result = purrr::map2(variable_name, short_label, ~ make_numeric_desc(pre_desc_base, .x, .y, "Pre-Matched"))) %>%
+  mutate(result = purrr::map2(variable_name, short_label, ~ make_numeric_desc(pre_desc_base, .x, .y, "Pre-Survey cleaned"))) %>%
   pull(result) %>%
   bind_rows()
 
 pre_categorical_desc <- selected_variables_checked %>%
   filter(survey == "Pre", table_type == "categorical") %>%
-  mutate(result = purrr::map2(variable_name, short_label, ~ make_categorical_desc(pre_desc_base, .x, .y, "Pre-Matched"))) %>%
+  mutate(result = purrr::map2(variable_name, short_label, ~ make_categorical_desc(pre_desc_base, .x, .y, "Pre-Survey cleaned"))) %>%
   pull(result) %>%
   bind_rows()
 
 main_numeric_desc <- selected_variables_checked %>%
   filter(survey == "Main", table_type == "numeric") %>%
-  mutate(result = purrr::map2(variable_name, short_label, ~ make_numeric_desc(main_desc_base, .x, .y, "Main-Matched"))) %>%
+  mutate(result = purrr::map2(variable_name, short_label, ~ make_numeric_desc(main_desc_base, .x, .y, "Main-Survey cleaned"))) %>%
   pull(result) %>%
   bind_rows()
 
 main_categorical_desc <- selected_variables_checked %>%
   filter(survey == "Main", table_type == "categorical") %>%
-  mutate(result = purrr::map2(variable_name, short_label, ~ make_categorical_desc(main_desc_base, .x, .y, "Main-Matched"))) %>%
+  mutate(result = purrr::map2(variable_name, short_label, ~ make_categorical_desc(main_desc_base, .x, .y, "Main-Survey cleaned"))) %>%
   pull(result) %>%
   bind_rows()
 
@@ -1225,7 +1134,7 @@ requested_pre_top3_vars <- c(
 )
 
 requested_pre_summary <- make_pre_post_requested_summary(
-  final_analysis_dataset,
+  pre_survey_dataset,
   vars = requested_pre_vars,
   top_n_vars = requested_pre_top3_vars
 )
@@ -2002,7 +1911,7 @@ writexl::write_xlsx(
     target_word_category_check = target_word_category_check,
     unmapped_target_words = unmapped_target_words
   ),
-  path = file.path(out_tables_dir, "05_descriptive_reporting_tables.xlsx")
+  path = file.path(out_tables_dir, "06_descriptive_reporting_tables.xlsx")
 )
 
 ggsave(file.path(out_figures_dir, "Fig1_cleaning_flow.png"), plot_cleaning_flow, width = 8, height = 5, dpi = 300)
@@ -2044,7 +1953,7 @@ writexl::write_xlsx(
     extended_caption_guide = extended_caption_guide,
     survey_duration_summary_table = survey_duration_summary_table  # CHANGED
   ),
-  path = file.path(out_extended_dir, "05b_extended_descriptives.xlsx")
+  path = file.path(out_extended_dir, "06b_extended_descriptives.xlsx")
 )
 
 save_requested_table_outputs(requested_pre_variable_summary_table, "01_requested_pre_variable_summary_table")
@@ -2632,7 +2541,7 @@ gt_manifest <- purrr::imap_dfr(
 
 save_table_outputs(
   gt_manifest,
-  base_filename = "05_reporting_gt_manifest",
+  base_filename = "06_reporting_gt_manifest",
   out_dir = out_gt_doc_dir
 )
 gt_index_path <- file.path(out_gt_dir, "00_gt_index.html")   # CHANGED
@@ -2667,14 +2576,14 @@ gt_console_summary <- c(
 
 writeLines(
   gt_console_summary,
-  con = file.path(out_gt_doc_dir, "05_reporting_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "06_reporting_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
 message("Index file: ", gt_index_path)                     # CHANGED
-message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "06_reporting_gt_manifest.csv"))
 
 # =========================================================
 # CHANGED: Pfad am Ende explizit zurückgeben
@@ -2693,25 +2602,25 @@ gt_console_summary <- c(
 
 writeLines(
   gt_console_summary,
-  con = file.path(out_gt_doc_dir, "05_reporting_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "06_reporting_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "06_reporting_gt_manifest.csv"))
 
 
 # =========================================================
-# 13) Lokaler Export-Index für Skript 05                  ===
+# 13) Lokaler Export-Index für Skript 06                  ===
 # =========================================================
 
-local_index_path_05 <- file.path(out_desc_dir, "00_export_index.html")
-local_manifest_csv_05 <- file.path(out_captions_dir, "00_export_manifest.csv")
-local_manifest_xlsx_05 <- file.path(out_captions_dir, "00_export_manifest.xlsx")
+local_index_path_06 <- file.path(out_desc_dir, "00_export_index.html")
+local_manifest_csv_06 <- file.path(out_captions_dir, "00_export_manifest.csv")
+local_manifest_xlsx_06 <- file.path(out_captions_dir, "00_export_manifest.xlsx")
 
-local_export_files_05 <- list.files(
+local_export_files_06 <- list.files(
   out_desc_dir,
   recursive = TRUE,
   full.names = TRUE,
@@ -2719,43 +2628,43 @@ local_export_files_05 <- list.files(
   no.. = TRUE
 )
 
-local_export_files_05 <- local_export_files_05[
-  file.exists(local_export_files_05) & !dir.exists(local_export_files_05)
+local_export_files_06 <- local_export_files_06[
+  file.exists(local_export_files_06) & !dir.exists(local_export_files_06)
 ]
 
-local_export_files_05 <- setdiff(
-  local_export_files_05,
-  c(local_index_path_05, local_manifest_csv_05, local_manifest_xlsx_05)
+local_export_files_06 <- setdiff(
+  local_export_files_06,
+  c(local_index_path_06, local_manifest_csv_06, local_manifest_xlsx_06)
 )
 
-export_manifest_05 <- tibble(
-  label = basename(local_export_files_05),
-  path = local_export_files_05,
-  notes = paste0("Exportdatei aus Skript 05 (", toupper(tools::file_ext(local_export_files_05)), ")")
+export_manifest_06 <- tibble(
+  label = basename(local_export_files_06),
+  path = local_export_files_06,
+  notes = paste0("Exportdatei aus Skript 06 (", toupper(tools::file_ext(local_export_files_06)), ")")
 ) %>%
   bind_rows(
     tibble(
       label = c("00_export_manifest.csv", "00_export_manifest.xlsx"),
-      path = c(local_manifest_csv_05, local_manifest_xlsx_05),
+      path = c(local_manifest_csv_06, local_manifest_xlsx_06),
       notes = c("Lokales Export-Manifest als CSV", "Lokales Export-Manifest als XLSX")
     )
   ) %>%
   arrange(path)
 
 save_table_outputs(
-  export_manifest_05,
+  export_manifest_06,
   base_filename = "00_export_manifest",
   out_dir = out_captions_dir
 )
 
 build_general_export_index(
-  manifest = export_manifest_05,
-  output_path = local_index_path_05,
+  manifest = export_manifest_06,
+  output_path = local_index_path_06,
   title_text = "Deskriptive Statistik & Reporting: Export index",
-  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken, GT-Tabellen und Dokumentationsdateien des Skripts 05."
+  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken, GT-Tabellen und Dokumentationsdateien des Skripts 06."
 )
 
-message("Local export index: ", local_index_path_05)
+message("Local export index: ", local_index_path_06)
 
 gt_preview_removal_summary
 gt_raw_dataset_overview

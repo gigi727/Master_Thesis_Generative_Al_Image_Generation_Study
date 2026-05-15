@@ -17,7 +17,7 @@
 # pre-survey descriptives (cleaned pre-survey data before merging).
 #
 # It is designed as a presentation layer on top of:
-#   08_pre_survey_premerge_requested_descriptives.R
+#   07_pre_survey_premerge_requested_descriptives_fixed_unified.R
 #
 # Workflow:
 # - source the base descriptives script when needed
@@ -42,9 +42,6 @@ library(readr)
 # 1) Paths and output folders                           ===
 # =========================================================
 
-# >>> ADDED <<<
-output_dir <- get_output_dir("07")
-
 project_root <- here::here()
 
 
@@ -67,14 +64,10 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-base_script_candidates <- c(
-  file.path(project_root, "scripts", "06_pre_survey_premerge_requested_descriptives_fixed_unified.R"),
-  file.path(project_root, "06_pre_survey_premerge_requested_descriptives_fixed_unified.R")
-)
+base_script_path <- file.path(project_root, "scripts", "07_pre_survey_premerge_requested_descriptives_fixed_unified.R")
 
-base_script_path <- base_script_candidates[file.exists(base_script_candidates)][1]
 
-if (length(base_script_path) == 0 || is.na(base_script_path)) {
+if (is.na(base_script_path)) {
   stop(
     paste0(
       "The base descriptives script could not be found. Expected one of these locations:\n",
@@ -474,7 +467,7 @@ gt_manifest <- purrr::imap_dfr(
 
 readr::write_csv(
   gt_manifest,
-  file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_manifest.csv")
+  file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_manifest.csv")
 )
 
 # =========================================================
@@ -552,14 +545,14 @@ console_summary <- c(
 
 writeLines(
   console_summary,
-  con = file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the requested pre-survey descriptives were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_manifest.csv"))
 
 #####################################################################
 ### End of workflow                                               ###

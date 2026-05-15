@@ -115,8 +115,6 @@ normalize_path_safe <- function(path) {
 }
 
 path_exists_safe <- function(path) {
-  path <- path[1]
-
   !is.na(path) && nzchar(path) && file.exists(path)
 }
 
@@ -284,47 +282,25 @@ is_research_candidate <- function(files) {
 
   is_index_or_manifest <- stringr::str_detect(
     basenames,
-    regex(
-      "(^00_.*index|_index|master_export_manifest|export_manifest|console_summary)\\.(html|csv|xlsx|txt)$",
-      ignore_case = TRUE
-    )
+    regex("(^00_.*index|_index|master_export_manifest|export_manifest|console_summary)\\.(html|csv|xlsx|txt)$", ignore_case = TRUE)
   )
 
-  in_captions <- stringr::str_detect(
+  # Documentation/caption folders usually contain manifests, console summaries,
+  # and helper files that should not be copied into "Output for Research".
+  # Exception: some scripts, especially 01, store the actual gt table exports
+  # under data_output/documentation/gt_tables/html and .../rtf. These are
+  # genuine research tables and must therefore be kept.
+  is_documentation_file <- stringr::str_detect(
     files_norm,
-    regex("/captions/", ignore_case = TRUE)
+    regex("/(documentation|captions)/", ignore_case = TRUE)
   )
 
-  in_gt_tables <- stringr::str_detect(
+  is_gt_table_export <- stringr::str_detect(
     files_norm,
-    regex("/gt_tables/", ignore_case = TRUE)
+    regex("/gt_tables/(html|rtf)/", ignore_case = TRUE)
   )
 
-  in_tables <- stringr::str_detect(
-    files_norm,
-    regex("/tables/", ignore_case = TRUE)
-  )
-
-  in_figures <- stringr::str_detect(
-    files_norm,
-    regex("/figures/", ignore_case = TRUE)
-  )
-
-  in_internal_documentation <- stringr::str_detect(
-    files_norm,
-    regex("/(gt_tables|tables|figures)/documentation/", ignore_case = TRUE)
-  )
-
-  in_general_documentation <- stringr::str_detect(
-    files_norm,
-    regex("/documentation/", ignore_case = TRUE)
-  ) & !in_gt_tables & !in_tables & !in_figures
-
-  allowed_ext &
-    !is_index_or_manifest &
-    !in_captions &
-    !in_internal_documentation &
-    !in_general_documentation
+  allowed_ext & !is_index_or_manifest & (!is_documentation_file | is_gt_table_export)
 }
 
 classify_research_file <- function(file) {
@@ -381,15 +357,8 @@ build_research_index_html <- function(section_row, research_tbl, research_dir, r
   } else {
     file_list_html <- research_tbl %>%
       mutate(
-        link = purrr::map2_chr(
-          copied_path,
-          basename(copied_path),
-          ~ make_link_html(.x, .y, research_dir)
-        ),
-        source_rel = purrr::map_chr(
-          source_path,
-          ~ make_relative_path(.x, project_root)
-        )
+        link = make_link_html(copied_path, basename(copied_path), research_dir),
+        source_rel = make_relative_path(source_path, project_root)
       ) %>%
       group_by(category) %>%
       summarise(
@@ -429,13 +398,7 @@ build_research_index_html <- function(section_row, research_tbl, research_dir, r
     "  </style>",
     "</head>",
     "<body>",
-    paste0(
-      "  <h1>Output for Research – ",
-      html_escape_simple(section_row$script_id),
-      " – ",
-      html_escape_simple(section_row$section_title),
-      "</h1>"
-    ),
+    paste0("  <h1>Output for Research – ", html_escape_simple(section_row$script_id), " – ", html_escape_simple(section_row$section_title), "</h1>"),
     paste0("  <p>", html_escape_simple(section_row$description), "</p>"),
     paste0(
       "  <div class=\"summary-box\">",
@@ -586,7 +549,17 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "04", "Variablenübersicht", "Variablenübersicht aus 04_variablenuebersicht.R: Variableninventar mit Normierung, Typen und GT-Index.",
+  "04", "Final anonymized dataset", "Erstellung der anonymisierten Analyse-Datensätze aus 04_create_final_anonymized_dataset.R.",
+  file.path(project_root, "data_final"),
+  NA_character_,
+  file.path(project_root, "data_final"),
+  NA_character_,
+  NA_character_,
+  NA_character_,
+  NA_character_,
+  NA_character_,
+
+  "05", "Variablenübersicht", "Variablenübersicht aus 05_variablenuebersicht.R: Variableninventar mit Normierung, Typen und GT-Index.",
   file.path(project_root, "data_output", "variable_inventory"),
   file.path(project_root, "data_output", "variable_inventory", "gt_tables", "00_gt_index.html"),
   file.path(project_root, "data_output", "variable_inventory", "tables"),
@@ -596,7 +569,7 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "05", "Deskriptive Statistik & Reporting", "Konsolidierte Deskriptiven, erweiterte Tabellen, Grafiken und GT-Index.",
+  "06", "Deskriptive Statistik & Reporting", "Konsolidierte Deskriptiven, erweiterte Tabellen, Grafiken und GT-Index.",
   file.path(project_root, "data_output", "descriptives"),
   file.path(project_root, "data_output", "descriptives", "00_export_index.html"),
   file.path(project_root, "data_output", "descriptives", "tables"),
@@ -606,17 +579,17 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "06", "Pre-survey descriptives", "Angeforderte Pre-Survey-Deskriptiven auf Basis des finalen anonymisierten Datensatzes.",
+  "07", "Pre-survey descriptives", "Angeforderte Pre-Survey-Deskriptiven auf Basis des finalen anonymisierten Datensatzes.",
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested"),
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation", "00_export_index.html"),
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "tables"),
   NA_character_,
   NA_character_,
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation"),
-  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "08_pre_survey_premerge_requested_descriptives.xlsx"),
-  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation", "08_pre_survey_premerge_requested_descriptives_console_summary.txt"),
+  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "07_pre_survey_premerge_requested_descriptives.xlsx"),
+  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation", "07_pre_survey_premerge_requested_descriptives_console_summary.txt"),
 
-  "07", "Pre-survey GT tables", "Publikationsnahe GT-Tabellen für die angeforderten Pre-Survey-Deskriptiven.",
+  "08", "Pre-survey GT tables", "Publikationsnahe GT-Tabellen für die angeforderten Pre-Survey-Deskriptiven.",
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "gt_tables"),
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "gt_tables", "00_gt_index.html"),
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "tables"),
@@ -626,7 +599,7 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "08", "Main study GT tables", "Publikationsnahe GT-Tabellen für Main-Study-Resultate.",
+  "09", "Main study GT tables", "Publikationsnahe GT-Tabellen für Main-Study-Resultate.",
   file.path(project_root, "data_output", "main_study_results", "gt_tables"),
   file.path(project_root, "data_output", "main_study_results", "gt_tables", "00_gt_index.html"),
   file.path(project_root, "data_output", "main_study_results"),
@@ -636,45 +609,45 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "09", "VIVIQ level effect plots", "Zusatzplots und Tabellen nach VIVIQ-Level.",
+  "10", "VIVIQ level effect plots", "Zusatzplots und Tabellen nach VIVIQ-Level.",
   file.path(project_root, "data_output", "main_study_viviq_level_effects"),
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation", "00_export_index.html"),
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "tables"),
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_viviq_level_effects", "11_viviq_level_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation", "11_viviq_level_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_viviq_level_effects", "10_viviq_level_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation", "10_viviq_level_effect_console_summary.txt"),
 
-  "10", "Q6 duration effect plots", "Zusatzplots und Tabellen nach Nutzungsdauer aus Pre_Survey_Q6.",
+  "11", "Q6 duration effect plots", "Zusatzplots und Tabellen nach Nutzungsdauer aus Pre_Survey_Q6.",
   file.path(project_root, "data_output", "main_study_q6_duration_effects"),
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation", "00_export_index.html"),
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "tables"),
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_q6_duration_effects", "12_q6_duration_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation", "12_q6_duration_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_q6_duration_effects", "11_q6_duration_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation", "11_q6_duration_effect_console_summary.txt"),
 
-  "11", "Target-word-category effect plots", "Zusatzplots und Tabellen nach Target-Word-Kategorie.",
+  "12", "Target-word-category effect plots", "Zusatzplots und Tabellen nach Target-Word-Kategorie.",
   file.path(project_root, "data_output", "main_study_target_word_category_effects"),
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation", "00_export_index.html"),
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "tables"),
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_target_word_category_effects", "13_target_word_category_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation", "13_target_word_category_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_target_word_category_effects", "12_target_word_category_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation", "12_target_word_category_effect_console_summary.txt"),
 
-  "12", "Image agreement LMM analysis", "Abschließende Image-Agreement-Analyse mit Round-only und kontrolliertem LMM.",
+  "13", "Image agreement LMM analysis", "Abschließende Image-Agreement-Analyse mit Round-only und kontrolliertem LMM.",
   file.path(project_root, "data_output", "image_agreement_lmm_analysis"),
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "00_export_index.html"),
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "tables"),
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation"),
-  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "12_image_agreement_lmm_analysis_tables.xlsx"),
-  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "12_image_agreement_lmm_console_summary.txt")
+  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "13_image_agreement_final_unified_tables.xlsx"),
+  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "13_image_agreement_final_unified_console_summary.txt")
 )
 
 # =========================================================

@@ -38,8 +38,6 @@ library(writexl)
 # 1) Pfade
 # =========================================================
 
-output_dir <- get_output_dir("03")
-
 project_root <- here::here()
 
 helper_script_candidates <- c(
@@ -60,6 +58,8 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 }
 
 source(helper_script_path, local = .GlobalEnv)
+
+output_dir <- get_output_dir("03")
 
 scripts_dir  <- file.path(project_root, "scripts")
 

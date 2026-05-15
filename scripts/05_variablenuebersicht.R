@@ -14,11 +14,11 @@
 ### BESCHREIBUNG ###
 
 # Dieses Skript erstellt eine vollständige Übersicht über alle Variablen
-# des finalen anonymisierten Datensatzes. Für jede Variable werden Datensatz,
+# der anonymisierten Pre- und Main-Survey-Datensätze. Für jede Variable werden Datensatz,
 # Variablenname, Fragetext, ein beobachteter Beispielwert,
 # Antworttyp sowie eine vorhandene Normierung dokumentiert.
-# Das Skript baut direkt auf dem finalen anonymisierten Datensatz auf
-# und verwendet die dort enthaltenen präfixierten Variablennamen.
+# Das Skript baut direkt auf dem zentralen Cleaning-Skript auf und
+# verwendet die dort definierten präfixierten Variablennamen.
 
 # =========================================================
 # 0) Pakete                                              ===
@@ -86,156 +86,52 @@ purrr::walk(
 
 
 #####################################################################
-###         Finalen anonymisierten Datensatz laden                 ###
+###         Benötigte Objekte prüfen und Cleaning laden           ###
 #####################################################################
 
 ### BESCHREIBUNG ###
 
-# Ab dieser Version verwendet das Skript ausschließlich den finalen
-# anonymisierten Datensatz aus data_final/. Die Variablenübersicht wird
-# aus den dort enthaltenen Pre- und Main-Survey-Variablen rekonstruiert.
-# Es werden keine Rohdaten und keine Outputs aus 01-03 geladen.
-
+# Dieses Skript setzt auf dem zentralen Cleaning-Skript auf.
+# Falls die dort erzeugten Objekte noch nicht in der Global Environment
+# vorhanden sind, wird das Skript automatisch geladen.
+# Anschließend wird geprüft, ob alle benötigten Objekte tatsächlich
+# vorhanden sind.
 
 # =========================================================
-# Final-Dataset-Only Bootstrap                            ===
+# 2) Benötigte Objekte definieren                        ===
 # =========================================================
 
-load_final_analysis_dataset_only <- function(project_root) {
-  if (exists("final_analysis_dataset", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset", envir = .GlobalEnv)
-  } else if (exists("final_analysis_dataset_anonymized", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset_anonymized", envir = .GlobalEnv)
-  } else {
-    rds_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
-      file.path(project_root, "final_analysis_dataset_anonymized.rds")
-    )
-    csv_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.csv"),
-      file.path(project_root, "final_analysis_dataset_anonymized.csv")
-    )
+# =========================================================
+# 2) Anonymisierte Analyse-Datensätze laden              ===
+# =========================================================
 
-    rds_path <- rds_candidates[file.exists(rds_candidates)][1]
-    csv_path <- csv_candidates[file.exists(csv_candidates)][1]
+# Das Variableninventar basiert nun ausschließlich auf den öffentlich
+# verwendbaren anonymisierten Datensätzen in data_final/. Es werden keine
+# Rohdaten und keine Outputs aus 01-03 geladen.
 
-    if (!is.na(rds_path)) {
-      ds <- readRDS(rds_path)
-      message("Confirmation: Loaded final anonymized dataset: ", rds_path)
-    } else if (!is.na(csv_path)) {
-      ds <- readr::read_csv(csv_path, show_col_types = FALSE)
-      message("Confirmation: Loaded final anonymized dataset: ", csv_path)
-    } else {
-      stop(
-        paste0(
-          "The final anonymized dataset could not be found. Expected one of these files:\n",
-          paste(c(rds_candidates, csv_candidates), collapse = "\n"),
-          "\nRun 13_create_final_anonymized_dataset.R locally once and commit/upload only the data_final file."
-        ),
-        call. = FALSE
-      )
-    }
-  }
+loaded_datasets <- load_anonymized_analysis_datasets(
+  project_root = project_root,
+  require_pre = TRUE,
+  require_main = TRUE,
+  require_final = TRUE
+)
 
-  if (!"participant_id" %in% names(ds)) {
-    stop("The final dataset must contain 'participant_id'.", call. = FALSE)
-  }
+pre_survey_dataset <- loaded_datasets$pre_survey_dataset
+main_survey_dataset <- loaded_datasets$main_survey_dataset
+final_analysis_dataset <- loaded_datasets$final_analysis_dataset
 
-  suspicious_identifier_cols <- names(ds)[
-    stringr::str_detect(
-      names(ds),
-      stringr::regex(
-        "email|e-mail|matched_email|IPAddress|IP Address|Recipient|ExternalReference|Location.*Latitude|Location.*Longitude|ResponseId|Case_Response_ID",
-        ignore_case = TRUE
-      )
-    )
-  ]
+pre_feature_lookup <- loaded_datasets$pre_feature_lookup
+main_feature_lookup <- loaded_datasets$main_feature_lookup
 
-  if (length(suspicious_identifier_cols) > 0) {
-    stop(
-      paste0(
-        "Potential direct identifiers are still present in the final dataset:\n",
-        paste(suspicious_identifier_cols, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
+# Für die bestehende Inventarlogik werden raw/clean-Objekte gleichgesetzt.
+# Methodisch ändert sich dadurch keine Analyse; es wird lediglich verhindert,
+# dass Rohdaten oder nicht-anonymisierte Cleaning-Objekte benötigt werden.
+pre_raw <- pre_survey_dataset
+main_raw <- main_survey_dataset
+pre_clean_full <- pre_survey_dataset
+main_clean_full <- main_survey_dataset
 
-  ds <- dplyr::as_tibble(ds)
-  final_analysis_dataset <<- ds
-  final_analysis_dataset_anonymized <<- ds
-  final_analysis_dataset_full <<- ds
-
-  pre_cols <- names(ds)[stringr::str_detect(names(ds), "^Pre_Survey_")]
-  main_cols <- names(ds)[stringr::str_detect(names(ds), "^Main_Survey_")]
-  viviq_cols <- names(ds)[stringr::str_detect(names(ds), "^viviq_|^VIVIQ|^Main_Survey_Q([4-9]|1[0-9])_score$")]
-  prompt_cols <- names(ds)[stringr::str_detect(names(ds), "^(R[123]_|Case_|Overall_|Sequence_|Prompt_|Coding_)")]
-
-  pre_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(pre_cols))
-
-  main_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(main_cols), dplyr::any_of(c(viviq_cols, prompt_cols)))
-
-  pre_raw <<- pre_clean_full
-  main_raw <<- main_clean_full
-
-  pre_feature_lookup <<- tibble::tibble(
-    variable_name = pre_cols,
-    question_text = pre_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  main_feature_lookup <<- tibble::tibble(
-    variable_name = main_cols,
-    question_text = main_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  matched_pre_main <<- ds %>%
-    dplyr::select(participant_id) %>%
-    dplyr::distinct()
-
-  matched_pre_main_valid <<- matched_pre_main
-
-  main_matched_viviq_final <<- ds %>%
-    dplyr::select(participant_id, dplyr::any_of(viviq_cols)) %>%
-    dplyr::distinct(participant_id, .keep_all = TRUE)
-
-  preview_removal_summary <<- tibble::tibble(
-    dataset = c("Pre_Survey", "Main_Survey"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode: raw cleaning counts are not available from the public anonymized dataset."
-  )
-
-  pre_n_overview <<- tibble::tibble(
-    data_cleaning_step = c("DC1_Finished_false_removed", "DC3_Consent_no_removed"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode"
-  )
-
-  main_n_overview <<- pre_n_overview
-
-  pre_n_duplicate_ip <<- tibble::tibble(dataset = "Pre_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-  main_n_duplicate_ip <<- tibble::tibble(dataset = "Main_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-
-  match_summary <<- tibble::tibble(
-    metric = c("final_public_cases", "final_public_participants"),
-    value = c(nrow(ds), dplyr::n_distinct(ds$participant_id)),
-    note = "Calculated from final anonymized dataset"
-  )
-
-  match_summary_valid_only <<- match_summary
-
-  config_pre <<- list(dataset_label = "Pre_Survey", final_dataset_only = TRUE)
-  config_main <<- list(dataset_label = "Main_Survey", final_dataset_only = TRUE)
-
-  invisible(ds)
-}
-
-final_analysis_dataset <- load_final_analysis_dataset_only(project_root)
+message("Confirmation: Variable inventory uses only anonymized datasets from data_final/.")
 
 #####################################################################
 ###                    Hilfsfunktionen                            ###
@@ -436,10 +332,10 @@ variable_inventory_all <- bind_rows(variable_inventory_pre, variable_inventory_m
 # 7) Exporte                                               ===
 # =========================================================
 
-readr::write_csv(variable_inventory_all, file.path(out_tables_dir, "04_variable_overview_with_normalization.csv"))
-readr::write_csv(variable_inventory_pre, file.path(out_tables_dir, "04_pre_variable_overview_with_normalization.csv"))
-readr::write_csv(variable_inventory_main, file.path(out_tables_dir, "04_main_variable_overview_with_normalization.csv"))
-readr::write_csv(normalization_codebook, file.path(out_document_dir, "04_normalization_codebook.csv"))
+readr::write_csv(variable_inventory_all, file.path(out_tables_dir, "05_variable_overview_with_normalization.csv"))
+readr::write_csv(variable_inventory_pre, file.path(out_tables_dir, "05_pre_variable_overview_with_normalization.csv"))
+readr::write_csv(variable_inventory_main, file.path(out_tables_dir, "05_main_variable_overview_with_normalization.csv"))
+readr::write_csv(normalization_codebook, file.path(out_document_dir, "05_normalization_codebook.csv"))
 
 writexl::write_xlsx(
   list(
@@ -448,7 +344,7 @@ writexl::write_xlsx(
     variable_inventory_main = variable_inventory_main,
     normalization_codebook = normalization_codebook
   ),
-  path = file.path(out_inventory_dir, "04_variable_overview_with_normalization.xlsx")
+  path = file.path(out_inventory_dir, "05_variable_overview_with_normalization.xlsx")
 )
 
 
@@ -540,7 +436,7 @@ gt_manifest <- purrr::imap_dfr(
 
 save_table_outputs(
   gt_manifest,
-  base_filename = "04_variable_inventory_gt_manifest",
+  base_filename = "05_variable_inventory_gt_manifest",
   out_dir = out_gt_doc_dir
 )
 
@@ -562,14 +458,14 @@ gt_console_summary <- c(
 
 writeLines(
   gt_console_summary,
-  con = file.path(out_gt_doc_dir, "04_variable_inventory_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "05_variable_inventory_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the variable inventory workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "04_variable_inventory_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "05_variable_inventory_gt_manifest.csv"))
 
 gt_variable_inventory_all
 gt_variable_inventory_pre

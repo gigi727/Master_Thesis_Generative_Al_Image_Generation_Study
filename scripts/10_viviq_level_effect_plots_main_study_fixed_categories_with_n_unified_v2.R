@@ -24,7 +24,7 @@
 # - Main_Survey_Q52 nach VIVIQ-Level
 #
 # Die Darstellung orientiert sich an den vorhandenen ReqFig-Plots aus
-# 05_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert.R,
+# 06_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert.R,
 # ergänzt diese jedoch um eine Stratifizierung nach VIVIQ-Level.
 #
 # Kategorisierung in diesem Skript:
@@ -73,187 +73,57 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-
-# =========================================================
-# Final-Dataset-Only Bootstrap                            ===
-# =========================================================
-
-load_final_analysis_dataset_only <- function(project_root) {
-  if (exists("final_analysis_dataset", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset", envir = .GlobalEnv)
-  } else if (exists("final_analysis_dataset_anonymized", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset_anonymized", envir = .GlobalEnv)
-  } else {
-    rds_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
-      file.path(project_root, "final_analysis_dataset_anonymized.rds")
-    )
-    csv_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.csv"),
-      file.path(project_root, "final_analysis_dataset_anonymized.csv")
-    )
-
-    rds_path <- rds_candidates[file.exists(rds_candidates)][1]
-    csv_path <- csv_candidates[file.exists(csv_candidates)][1]
-
-    if (!is.na(rds_path)) {
-      ds <- readRDS(rds_path)
-      message("Confirmation: Loaded final anonymized dataset: ", rds_path)
-    } else if (!is.na(csv_path)) {
-      ds <- readr::read_csv(csv_path, show_col_types = FALSE)
-      message("Confirmation: Loaded final anonymized dataset: ", csv_path)
-    } else {
-      stop(
-        paste0(
-          "The final anonymized dataset could not be found. Expected one of these files:\n",
-          paste(c(rds_candidates, csv_candidates), collapse = "\n"),
-          "\nRun 13_create_final_anonymized_dataset.R locally once and commit/upload only the data_final file."
-        ),
-        call. = FALSE
-      )
-    }
-  }
-
-  if (!"participant_id" %in% names(ds)) {
-    stop("The final dataset must contain 'participant_id'.", call. = FALSE)
-  }
-
-  suspicious_identifier_cols <- names(ds)[
-    stringr::str_detect(
-      names(ds),
-      stringr::regex(
-        "email|e-mail|matched_email|IPAddress|IP Address|Recipient|ExternalReference|Location.*Latitude|Location.*Longitude|ResponseId|Case_Response_ID",
-        ignore_case = TRUE
-      )
-    )
-  ]
-
-  if (length(suspicious_identifier_cols) > 0) {
-    stop(
-      paste0(
-        "Potential direct identifiers are still present in the final dataset:\n",
-        paste(suspicious_identifier_cols, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
-
-  ds <- dplyr::as_tibble(ds)
-  final_analysis_dataset <<- ds
-  final_analysis_dataset_anonymized <<- ds
-  final_analysis_dataset_full <<- ds
-
-  pre_cols <- names(ds)[stringr::str_detect(names(ds), "^Pre_Survey_")]
-  main_cols <- names(ds)[stringr::str_detect(names(ds), "^Main_Survey_")]
-  viviq_cols <- names(ds)[stringr::str_detect(names(ds), "^viviq_|^VIVIQ|^Main_Survey_Q([4-9]|1[0-9])_score$")]
-  prompt_cols <- names(ds)[stringr::str_detect(names(ds), "^(R[123]_|Case_|Overall_|Sequence_|Prompt_|Coding_)")]
-
-  pre_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(pre_cols))
-
-  main_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(main_cols), dplyr::any_of(c(viviq_cols, prompt_cols)))
-
-  pre_raw <<- pre_clean_full
-  main_raw <<- main_clean_full
-
-  pre_feature_lookup <<- tibble::tibble(
-    variable_name = pre_cols,
-    question_text = pre_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  main_feature_lookup <<- tibble::tibble(
-    variable_name = main_cols,
-    question_text = main_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  matched_pre_main <<- ds %>%
-    dplyr::select(participant_id) %>%
-    dplyr::distinct()
-
-  matched_pre_main_valid <<- matched_pre_main
-
-  main_matched_viviq_final <<- ds %>%
-    dplyr::select(participant_id, dplyr::any_of(viviq_cols)) %>%
-    dplyr::distinct(participant_id, .keep_all = TRUE)
-
-  preview_removal_summary <<- tibble::tibble(
-    dataset = c("Pre_Survey", "Main_Survey"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode: raw cleaning counts are not available from the public anonymized dataset."
-  )
-
-  pre_n_overview <<- tibble::tibble(
-    data_cleaning_step = c("DC1_Finished_false_removed", "DC3_Consent_no_removed"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode"
-  )
-
-  main_n_overview <<- pre_n_overview
-
-  pre_n_duplicate_ip <<- tibble::tibble(dataset = "Pre_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-  main_n_duplicate_ip <<- tibble::tibble(dataset = "Main_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-
-  match_summary <<- tibble::tibble(
-    metric = c("final_public_cases", "final_public_participants"),
-    value = c(nrow(ds), dplyr::n_distinct(ds$participant_id)),
-    note = "Calculated from final anonymized dataset"
-  )
-
-  match_summary_valid_only <<- match_summary
-
-  config_pre <<- list(dataset_label = "Pre_Survey", final_dataset_only = TRUE)
-  config_main <<- list(dataset_label = "Main_Survey", final_dataset_only = TRUE)
-
-  invisible(ds)
-}
-
-final_analysis_dataset <- load_final_analysis_dataset_only(project_root)
-
 out_base_dir    <- file.path(project_root, "data_output", "main_study_viviq_level_effects")
 out_tables_dir  <- file.path(out_base_dir, "tables")
 out_figures_dir <- file.path(out_base_dir, "figures")
 out_doc_dir     <- file.path(out_base_dir, "documentation")
-out_gt_dir      <- file.path(out_base_dir, "gt_tables")
-out_gt_html_dir <- file.path(out_gt_dir, "html")
-out_gt_rtf_dir  <- file.path(out_gt_dir, "rtf")
-out_gt_doc_dir  <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
-  c(out_base_dir, out_tables_dir, out_figures_dir, out_doc_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir),
+  c(out_base_dir, out_tables_dir, out_figures_dir, out_doc_dir),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
 
 # =========================================================
-# 2) Benötigte Objekte prüfen                            ===
+# 2) Benötigte Objekte prüfen und bei Bedarf laden       ===
 # =========================================================
 
-# final_analysis_dataset, pre_feature_lookup und main_feature_lookup
-# werden im Final-Dataset-Only Bootstrap oben erzeugt. Es werden keine
-# Reporting-, Cleaning-, Matching- oder VIVIQ-Skripte geladen.
+# =========================================================
+# 2) Anonymisierte Analyse-Datensätze laden              ====
+# =========================================================
 
-# Fallbacks, falls das geladene Reporting-Skript einzelne Hilfsobjekte
-# in einer älteren Version nicht bereitstellt
+# Dieses Skript verwendet direkt den finalen gematchten anonymisierten
+# Datensatz aus data_final/. Es lädt nicht mehr Skript 06, damit keine
+# Rohdaten- oder Cleaning-Objekte aus 01-03 benötigt werden.
+
+loaded_datasets <- load_anonymized_analysis_datasets(
+  project_root = project_root,
+  require_pre = FALSE,
+  require_main = TRUE,
+  require_final = TRUE
+)
+
+final_analysis_dataset <- loaded_datasets$final_analysis_dataset
+main_feature_lookup <- loaded_datasets$main_feature_lookup
+
+message("Confirmation: This script uses data_final/final_analysis_dataset_anonymized.rds as its analysis base.")
+
+# Fallbacks, damit dieses Skript ohne Skript 06 lauffähig bleibt.
 if (!exists("theme_result", envir = .GlobalEnv, inherits = FALSE)) {
   theme_result <- function() {
-    theme_minimal(base_size = 12) +
-      theme(
-        plot.title = element_text(face = "bold", size = 13),
-        plot.subtitle = element_text(size = 10),
-        axis.title = element_text(face = "bold"),
-        strip.text = element_text(face = "bold"),
-        panel.grid.minor = element_blank(),
+    ggplot2::theme_minimal(base_size = 12) +
+      ggplot2::theme(
+        plot.title = ggplot2::element_text(face = "bold", size = 13),
+        plot.subtitle = ggplot2::element_text(size = 10),
+        axis.title = ggplot2::element_text(face = "bold"),
+        strip.text = ggplot2::element_text(face = "bold"),
+        panel.grid.minor = ggplot2::element_blank(),
         legend.position = "bottom",
         legend.direction = "horizontal"
       )
   }
 }
 
-agreement_levels <- if (exists("agreement_levels", inherits = FALSE)) {
+agreement_levels <- if (exists("agreement_levels", envir = .GlobalEnv, inherits = FALSE)) {
   agreement_levels
 } else {
   c(
@@ -267,7 +137,7 @@ agreement_levels <- if (exists("agreement_levels", inherits = FALSE)) {
   )
 }
 
-change_levels <- if (exists("change_levels", inherits = FALSE)) {
+change_levels <- if (exists("change_levels", envir = .GlobalEnv, inherits = FALSE)) {
   change_levels
 } else {
   c(
@@ -281,7 +151,7 @@ change_levels <- if (exists("change_levels", inherits = FALSE)) {
   )
 }
 
-three_ita_levels <- if (exists("three_ita_levels", inherits = FALSE)) {
+three_ita_levels <- if (exists("three_ita_levels", envir = .GlobalEnv, inherits = FALSE)) {
   three_ita_levels
 } else {
   c(
@@ -299,6 +169,7 @@ three_ita_levels <- if (exists("three_ita_levels", inherits = FALSE)) {
 q52_levels <- agreement_levels
 
 analysis_df <- final_analysis_dataset
+
 
 # =========================================================
 # 3) Hilfsfunktionen                                     ===
@@ -728,29 +599,16 @@ save_table_outputs(viviq_group_2_distribution, "04_viviq_group_2_distribution")
 save_table_outputs(viviq_block_distribution, "05_viviq_block_distribution")
 save_table_outputs(viviq_q52_distribution, "06_viviq_q52_distribution")
 
-viviq_tables_for_research <- list(
-  "01_viviq_level_overview" = viviq_level_overview,
-  "02_viviq_analysis_n_overview" = viviq_analysis_n_overview,
-  "03_viviq_group_1_distribution" = viviq_group_1_distribution,
-  "04_viviq_group_2_distribution" = viviq_group_2_distribution,
-  "05_viviq_block_distribution" = viviq_block_distribution,
-  "06_viviq_q52_distribution" = viviq_q52_distribution
-)
-
 writexl::write_xlsx(
-  viviq_tables_for_research,
-  path = file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx")
-)
-
-gt_manifest_09 <- save_table_collection_as_gt(
-  table_list = viviq_tables_for_research,
-  out_gt_html_dir = out_gt_html_dir,
-  out_gt_rtf_dir = out_gt_rtf_dir,
-  out_gt_doc_dir = out_gt_doc_dir,
-  manifest_base_filename = "09_viviq_level_effect_gt_manifest",
-  index_title = "VIVIQ-level effect tables - GT outputs",
-  index_intro = "This index links to publication-oriented HTML and RTF versions of all VIVIQ-level effect tables.",
-  source_note = "Generated from data_final/final_analysis_dataset_anonymized."
+  list(
+    viviq_level_overview = viviq_level_overview,
+    viviq_analysis_n_overview = viviq_analysis_n_overview,
+    viviq_group_1_distribution = viviq_group_1_distribution,
+    viviq_group_2_distribution = viviq_group_2_distribution,
+    viviq_block_distribution = viviq_block_distribution,
+    viviq_q52_distribution = viviq_q52_distribution
+  ),
+  path = file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx")
 )
 
 # =========================================================
@@ -814,12 +672,12 @@ console_summary <- c(
   ),
   "",
   "Exported workbook:",
-  file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx")
+  file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx")
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt")
+  con = file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt")
 )
 
 # =========================================================
@@ -860,12 +718,12 @@ export_manifest <- tibble(
     file.path(out_tables_dir, "05_viviq_block_distribution.xlsx"),
     file.path(out_tables_dir, "06_viviq_q52_distribution.csv"),
     file.path(out_tables_dir, "06_viviq_q52_distribution.xlsx"),
-    file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx"),
+    file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx"),
     file.path(out_figures_dir, "VIVIQFig1_longitudinal_group_1_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig2_longitudinal_group_2_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig3_longitudinal_block_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig4_q52_by_level.png"),
-    file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt")
+    file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt")
   ),
   notes = c(
     "Tabelle als CSV",
@@ -895,14 +753,14 @@ build_general_export_index(
   manifest = export_manifest,
   output_path = file.path(out_doc_dir, "00_export_index.html"),
   title_text = "VIVIQ level effect plots: Export index",
-  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken und Dokumentation des Skripts 09."
+  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken und Dokumentation des Skripts 10."
 )
 
 message("Confirmation: VIVIQ-level effect plots for the main study were exported successfully.")
 message("Figures: ", out_figures_dir)
 message("Tables: ", out_tables_dir)
-message("Workbook: ", file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx"))
-message("Console summary: ", file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt"))
+message("Workbook: ", file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx"))
+message("Console summary: ", file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt"))
 
 #####################################################################
 ### End of workflow                                               ###

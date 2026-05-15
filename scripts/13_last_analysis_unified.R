@@ -70,166 +70,25 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-
-# =========================================================
-# Final-Dataset-Only Bootstrap                            ===
-# =========================================================
-
-load_final_analysis_dataset_only <- function(project_root) {
-  if (exists("final_analysis_dataset", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset", envir = .GlobalEnv)
-  } else if (exists("final_analysis_dataset_anonymized", envir = .GlobalEnv, inherits = FALSE)) {
-    ds <- get("final_analysis_dataset_anonymized", envir = .GlobalEnv)
-  } else {
-    rds_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
-      file.path(project_root, "final_analysis_dataset_anonymized.rds")
-    )
-    csv_candidates <- c(
-      file.path(project_root, "data_final", "final_analysis_dataset_anonymized.csv"),
-      file.path(project_root, "final_analysis_dataset_anonymized.csv")
-    )
-
-    rds_path <- rds_candidates[file.exists(rds_candidates)][1]
-    csv_path <- csv_candidates[file.exists(csv_candidates)][1]
-
-    if (!is.na(rds_path)) {
-      ds <- readRDS(rds_path)
-      message("Confirmation: Loaded final anonymized dataset: ", rds_path)
-    } else if (!is.na(csv_path)) {
-      ds <- readr::read_csv(csv_path, show_col_types = FALSE)
-      message("Confirmation: Loaded final anonymized dataset: ", csv_path)
-    } else {
-      stop(
-        paste0(
-          "The final anonymized dataset could not be found. Expected one of these files:\n",
-          paste(c(rds_candidates, csv_candidates), collapse = "\n"),
-          "\nRun 13_create_final_anonymized_dataset.R locally once and commit/upload only the data_final file."
-        ),
-        call. = FALSE
-      )
-    }
-  }
-
-  if (!"participant_id" %in% names(ds)) {
-    stop("The final dataset must contain 'participant_id'.", call. = FALSE)
-  }
-
-  suspicious_identifier_cols <- names(ds)[
-    stringr::str_detect(
-      names(ds),
-      stringr::regex(
-        "email|e-mail|matched_email|IPAddress|IP Address|Recipient|ExternalReference|Location.*Latitude|Location.*Longitude|ResponseId|Case_Response_ID",
-        ignore_case = TRUE
-      )
-    )
-  ]
-
-  if (length(suspicious_identifier_cols) > 0) {
-    stop(
-      paste0(
-        "Potential direct identifiers are still present in the final dataset:\n",
-        paste(suspicious_identifier_cols, collapse = "\n")
-      ),
-      call. = FALSE
-    )
-  }
-
-  ds <- dplyr::as_tibble(ds)
-  final_analysis_dataset <<- ds
-  final_analysis_dataset_anonymized <<- ds
-  final_analysis_dataset_full <<- ds
-
-  pre_cols <- names(ds)[stringr::str_detect(names(ds), "^Pre_Survey_")]
-  main_cols <- names(ds)[stringr::str_detect(names(ds), "^Main_Survey_")]
-  viviq_cols <- names(ds)[stringr::str_detect(names(ds), "^viviq_|^VIVIQ|^Main_Survey_Q([4-9]|1[0-9])_score$")]
-  prompt_cols <- names(ds)[stringr::str_detect(names(ds), "^(R[123]_|Case_|Overall_|Sequence_|Prompt_|Coding_)")]
-
-  pre_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(pre_cols))
-
-  main_clean_full <<- ds %>%
-    dplyr::select(participant_id, dplyr::all_of(main_cols), dplyr::any_of(c(viviq_cols, prompt_cols)))
-
-  pre_raw <<- pre_clean_full
-  main_raw <<- main_clean_full
-
-  pre_feature_lookup <<- tibble::tibble(
-    variable_name = pre_cols,
-    question_text = pre_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  main_feature_lookup <<- tibble::tibble(
-    variable_name = main_cols,
-    question_text = main_cols,
-    source = "final_analysis_dataset_anonymized"
-  )
-
-  matched_pre_main <<- ds %>%
-    dplyr::select(participant_id) %>%
-    dplyr::distinct()
-
-  matched_pre_main_valid <<- matched_pre_main
-
-  main_matched_viviq_final <<- ds %>%
-    dplyr::select(participant_id, dplyr::any_of(viviq_cols)) %>%
-    dplyr::distinct(participant_id, .keep_all = TRUE)
-
-  preview_removal_summary <<- tibble::tibble(
-    dataset = c("Pre_Survey", "Main_Survey"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode: raw cleaning counts are not available from the public anonymized dataset."
-  )
-
-  pre_n_overview <<- tibble::tibble(
-    data_cleaning_step = c("DC1_Finished_false_removed", "DC3_Consent_no_removed"),
-    n_removed = NA_integer_,
-    n_kept = nrow(ds),
-    note = "Final-dataset-only mode"
-  )
-
-  main_n_overview <<- pre_n_overview
-
-  pre_n_duplicate_ip <<- tibble::tibble(dataset = "Pre_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-  main_n_duplicate_ip <<- tibble::tibble(dataset = "Main_Survey", n_duplicate_ip = NA_integer_, note = "IP address removed from final dataset")
-
-  match_summary <<- tibble::tibble(
-    metric = c("final_public_cases", "final_public_participants"),
-    value = c(nrow(ds), dplyr::n_distinct(ds$participant_id)),
-    note = "Calculated from final anonymized dataset"
-  )
-
-  match_summary_valid_only <<- match_summary
-
-  config_pre <<- list(dataset_label = "Pre_Survey", final_dataset_only = TRUE)
-  config_main <<- list(dataset_label = "Main_Survey", final_dataset_only = TRUE)
-
-  invisible(ds)
-}
-
-final_analysis_dataset <- load_final_analysis_dataset_only(project_root)
-
 out_base_dir    <- file.path(project_root, "data_output", "image_agreement_lmm_analysis")
 out_tables_dir  <- file.path(out_base_dir, "tables")
 out_figures_dir <- file.path(out_base_dir, "figures")
 out_doc_dir     <- file.path(out_base_dir, "documentation")
-out_gt_dir      <- file.path(out_base_dir, "gt_tables")
-out_gt_html_dir <- file.path(out_gt_dir, "html")
-out_gt_rtf_dir  <- file.path(out_gt_dir, "rtf")
-out_gt_doc_dir  <- file.path(out_gt_dir, "documentation")
 
-ensure_directories(c(out_base_dir, out_tables_dir, out_figures_dir, out_doc_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir))
+ensure_directories(c(out_base_dir, out_tables_dir, out_figures_dir, out_doc_dir))
 
 # =========================================================
 # 2) Benötigten konsolidierten Datensatz bereitstellen    ===
 # =========================================================
 
-# final_analysis_dataset wurde im Final-Dataset-Only Bootstrap geladen.
-# Es werden keine Reporting-, Cleaning-, Matching- oder VIVIQ-Skripte geladen.
+final_analysis_dataset <- read_required_rds(
+  file.path(project_root, "data_final", "final_analysis_dataset_anonymized.rds"),
+  "Final matched anonymized analysis dataset"
+)
 
-analysis_source_name <- "data_final/final_analysis_dataset_anonymized"
+message("Confirmation: Script 13 uses data_final/final_analysis_dataset_anonymized.rds.")
+
+analysis_source_name <- "final_analysis_dataset"
 analysis_raw <- final_analysis_dataset
 
 # =========================================================
@@ -925,18 +784,7 @@ purrr::iwalk(
 
 writexl::write_xlsx(
   tables_to_export,
-  path = file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx")
-)
-
-gt_manifest_12 <- save_table_collection_as_gt(
-  table_list = tables_to_export,
-  out_gt_html_dir = out_gt_html_dir,
-  out_gt_rtf_dir = out_gt_rtf_dir,
-  out_gt_doc_dir = out_gt_doc_dir,
-  manifest_base_filename = "12_image_agreement_final_unified_gt_manifest",
-  index_title = "Image agreement final unified analysis - GT outputs",
-  index_intro = "This index links to publication-oriented HTML and RTF versions of all final image-agreement analysis tables.",
-  source_note = "Generated from data_final/final_analysis_dataset_anonymized."
+  path = file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx")
 )
 
 # =========================================================
@@ -961,17 +809,17 @@ ggsave(
 
 writeLines(
   capture.output(summary(model_primary_round_factor)),
-  con = file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt")
+  con = file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt")
 )
 
 writeLines(
   capture.output(summary(model_controlled_q7)),
-  con = file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt")
+  con = file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt")
 )
 
 writeLines(
   capture.output(summary(model_ordinal_q7)),
-  con = file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt")
+  con = file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt")
 )
 
 # =========================================================
@@ -1036,21 +884,21 @@ console_summary <- c(
   capture.output(print(change_direction_summary)),
   "",
   "Exported workbook:",
-  file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
+  file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"),
   "",
   "Exported figures:",
   file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
   file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
   "",
   "Model summaries:",
-  file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt"),
-  file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt"),
-  file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt")
+  file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt"),
+  file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt"),
+  file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt")
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt")
+  con = file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt")
 )
 
 writeLines(
@@ -1199,14 +1047,14 @@ method_results_report <- c(
   paste0("Tabellenordner: ", out_tables_dir),
   paste0("Grafikordner: ", out_figures_dir),
   paste0("Dokumentationsordner: ", out_doc_dir),
-  paste0("Kombinierte Excel-Datei: ", file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx")),
+  paste0("Kombinierte Excel-Datei: ", file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx")),
   "",
   "==================== END OF REPORT ===================="
 )
 
 writeLines(
   method_results_report,
-  con = file.path(out_doc_dir, "12_image_agreement_method_results_report.txt")
+  con = file.path(out_doc_dir, "13_image_agreement_method_results_report.txt")
 )
 
 # =========================================================
@@ -1237,13 +1085,13 @@ other_manifest <- tibble(
     "ChatGPT summary"
   ),
   path = c(
-    file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
+    file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"),
     file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
     file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
-    file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt"),
-    file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt"),
-    file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt"),
-    file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt"),
+    file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt"),
+    file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt"),
+    file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt"),
+    file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt"),
     file.path(project_root, "data_output", "RESULTS_FOR_CHATGPT_image_agreement_final_unified.txt")
   ),
   notes = c(
@@ -1282,9 +1130,9 @@ if (exists("build_general_export_index")) {
 message("Confirmation: Final unified image agreement analysis was exported successfully.")
 message("Tables: ", out_tables_dir)
 message("Figures: ", out_figures_dir)
-message("Workbook: ", file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"))
+message("Workbook: ", file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"))
 message("Local index: ", file.path(out_doc_dir, "00_export_index.html"))
-message("Console summary: ", file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt"))
+message("Console summary: ", file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt"))
 message("ChatGPT summary: ", file.path(project_root, "data_output", "RESULTS_FOR_CHATGPT_image_agreement_final_unified.txt"))
 
 #####################################################################

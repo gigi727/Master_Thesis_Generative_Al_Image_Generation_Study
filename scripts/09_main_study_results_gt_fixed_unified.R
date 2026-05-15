@@ -9,7 +9,7 @@
 # Alle Bezüge zum gelöschten Hypothesenanalyse-Skript
 # `04_hypothesenanalyse_hauptteil_unified_v2.R` wurden entfernt.
 # Das Skript basiert nun ausschließlich auf den Reporting-/
-# Deskriptiv-Outputs aus Skript 05.
+# Deskriptiv-Outputs aus Skript 06.
 
 #####################################################################
 ### Main study reporting results as GT tables                      ###
@@ -68,8 +68,8 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 source(helper_script_path, local = .GlobalEnv)
 
 reporting_script_candidates <- c(
-  file.path(project_root, "scripts", "05_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert_unified.R"),
-  file.path(project_root, "05_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert_unified.R")
+  file.path(project_root, "scripts", "06_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert_unified.R"),
+  file.path(project_root, "06_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert_unified.R")
 )
 
 reporting_candidates_existing <- reporting_script_candidates[file.exists(reporting_script_candidates)]
@@ -566,7 +566,7 @@ gt_manifest <- purrr::imap_dfr(
 
 readr::write_csv(
   gt_manifest,
-  file.path(out_gt_doc_dir, "08_main_study_results_gt_manifest.csv")
+  file.path(out_gt_doc_dir, "09_main_study_results_gt_manifest.csv")
 )
 
 # =========================================================
@@ -644,14 +644,14 @@ console_summary <- c(
 
 writeLines(
   console_summary,
-  con = file.path(out_gt_doc_dir, "08_main_study_results_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "09_main_study_results_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the main study reporting results were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "08_main_study_results_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "09_main_study_results_gt_manifest.csv"))
 
 #####################################################################
 ### End of workflow                                               ###
