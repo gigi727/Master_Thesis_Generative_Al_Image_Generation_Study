@@ -1,0 +1,4 @@
+object,n_rows,n_columns,id_variable,role,direct_identifiers_removed,dates_retained,free_text_retained,age_gender_retained
+pre_survey_anonymized,189,81,pre_participant_id,Cleaned Pre-Survey dataset before matching,TRUE,TRUE,TRUE,TRUE
+main_survey_anonymized,46,101,main_participant_id,Cleaned Main-Survey dataset before matching,TRUE,TRUE,TRUE,TRUE
+final_analysis_dataset_anonymized,46,231,participant_id,Matched final analysis dataset with VIVIQ and prompt coding,TRUE,TRUE,TRUE,TRUE

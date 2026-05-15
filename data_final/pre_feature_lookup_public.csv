@@ -1,0 +1,66 @@
+survey,variable_name,question_text
+Pre_Survey,Pre_Survey_Pre_Survey_Nr,Pre Survey Nummer
+Pre_Survey,Pre_Survey_StartDate,Start Date
+Pre_Survey,Pre_Survey_EndDate,End Date
+Pre_Survey,Pre_Survey_Status,Response Type
+Pre_Survey,Pre_Survey_Progress,Progress
+Pre_Survey,Pre_Survey_Duration,Duration (in seconds)
+Pre_Survey,Pre_Survey_Finished,Finished
+Pre_Survey,Pre_Survey_RecordedDate,Recorded Date
+Pre_Survey,Pre_Survey_DistributionChannel,Distribution Channel
+Pre_Survey,Pre_Survey_UserLanguage,User Language
+Pre_Survey,Pre_Survey_Q_RecaptchaScore,Q_RecaptchaScore
+Pre_Survey,Pre_Survey_Q1,"Consent Statement: By clicking ÒI agreeÓ, you confirm that: You are at least 18 years old You have read and understood the information above You voluntarily agree to participate in this study. Do you agree to participate in this study?"
+Pre_Survey,Pre_Survey_Q2,"Before image generators (like DALLE (OpenAI), Midjourney, Nano Banana etc.) were available, how did you express or visualize a mental image to communicate it to others or clarify it for yourself? Examples of such situations could include: (1) describing a scene from a story, dream, or memory to someone else; (2) explaining a design idea to a colleague or client (e.g., how a poster, logo, room, or interface should look); or (3) planning and imagining a space (e.g., rearranging furniture, designing a room, or envisioning a building or landscape). - Selected Choice"
+Pre_Survey,Pre_Survey_Q2_TEXT,"Before image generators (like DALLE (OpenAI), Midjourney, Nano Banana etc.) were available, how did you express or visualize a mental image to communicate it to others or clarify it for yourself? Examples of such situations could include: (1) describing a scene from a story, dream, or memory to someone else; (2) explaining a design idea to a colleague or client (e.g., how a poster, logo, room, or interface should look); or (3) planning and imagining a space (e.g., rearranging furniture, designing a room, or envisioning a building or landscape). - Other (please specify): - Text"
+Pre_Survey,Pre_Survey_Q3,Have you ever used a generative AI (GenAI) tool for image generation?
+Pre_Survey,Pre_Survey_Q4_1,"If you don't use GenAI for image generation, what do you typically use GenAI for? - Selected Choice"
+Pre_Survey,Pre_Survey_Q4_1_TEXT,"If you don't use GenAI for image generation, what do you typically use GenAI for? - Other (please explain shortly) - Text"
+Pre_Survey,Pre_Survey_Q4_2,Please leave me your e-mail address:
+Pre_Survey,Pre_Survey_Q4_3,What do you typically use GenAI for in addition to using it for image generation? - Selected Choice
+Pre_Survey,Pre_Survey_Q4_3_TEXT,What do you typically use GenAI for in addition to using it for image generation? - Other (please explain shortly) - Text
+Pre_Survey,Pre_Survey_Q6,"How long have you been using GenAI for image generation? (as a reference: Public adoption of Gen AI surged in 2022, when tools like ChatGPT/Midjourney/DALLE/Stable Diffusion made generative AI accessible to millions of users.)"
+Pre_Survey,Pre_Survey_Q7,How often do you currently use GenAI for image generation? - Selected Choice
+Pre_Survey,Pre_Survey_Q7_TEXT,"How often do you currently use GenAI for image generation? - I no longer use it. If so, why? - Text"
+Pre_Survey,Pre_Survey_Q8,What is your experience with prompting GenAI in general? - 1 = very inexperienced to 7 = very experienced
+Pre_Survey,Pre_Survey_Q9,Which GenAI image tools have you used so far? - Selected Choice
+Pre_Survey,Pre_Survey_Q9_TEXT,Which GenAI image tools have you used so far? - Other - Text
+Pre_Survey,Pre_Survey_Q10,Do you pay for GenAI image tools?
+Pre_Survey,Pre_Survey_Q11,For what purposes do you mainly use GenAI image tools? - Selected Choice
+Pre_Survey,Pre_Survey_Q11_TEXT,For what purposes do you mainly use GenAI image tools? - Other - Text
+Pre_Survey,Pre_Survey_Q12,What types of images do you generate most frequently? - Selected Choice
+Pre_Survey,Pre_Survey_Q12_TEXT,What types of images do you generate most frequently? - Others (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q13_1,How important are the following goals when generating images? - Realism / high visual quality
+Pre_Survey,Pre_Survey_Q13_2,How important are the following goals when generating images? - Creativity / novelty
+Pre_Survey,Pre_Survey_Q13_3,How important are the following goals when generating images? - Control over the output
+Pre_Survey,Pre_Survey_Q13_4,How important are the following goals when generating images? - Speed / efficiency
+Pre_Survey,Pre_Survey_Q13_5,How important are the following goals when generating images? - Variety / exploration
+Pre_Survey,Pre_Survey_Q13_6,How important are the following goals when generating images? - Alignment with my mental image
+Pre_Survey,Pre_Survey_Q14,What are your main challenges when prompting? - Selected Choice
+Pre_Survey,Pre_Survey_Q14_TEXT,What are your main challenges when prompting? - Others (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q15,How do you usually create prompts? - Selected Choice
+Pre_Survey,Pre_Survey_Q15_TEXT,How do you usually create prompts? - Others (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q16,"When using generative AI tools (e.g., ChatGPT), do you deliberately adjust how you phrase your inputs in order to obtain better or more relevant outputs? (also referred to as prompt engineering)."
+Pre_Survey,Pre_Survey_Q17,Which elements do you frequently include in prompts? - Selected Choice
+Pre_Survey,Pre_Survey_Q17_TEXT,Which elements do you frequently include in prompts? - Others (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q18,How difficult is it for you to phrase prompts so that the output matches your intention? - 1 = Extremely easy É 7 = Extremely difficult
+Pre_Survey,Pre_Survey_Q19,How many iterations do you typically need to achieve a satisfying result? (Excluding prompts used for prompt engineering purposes). - Selected Choice
+Pre_Survey,Pre_Survey_Q19_TEXT,How many iterations do you typically need to achieve a satisfying result? (Excluding prompts used for prompt engineering purposes). - Hard to say (please describe shorty) - Text
+Pre_Survey,Pre_Survey_Q20,How do you primarily perceive GenAI in image creation? - Selected Choice
+Pre_Survey,Pre_Survey_Q20_TEXT,How do you primarily perceive GenAI in image creation? - Other/ It depends (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q21_1,Please indicate your level of agreement: - Generative AI helps me reach results faster.
+Pre_Survey,Pre_Survey_Q21_2,Please indicate your level of agreement: - Generative AI inspires ideas I would not have had otherwise.
+Pre_Survey,Pre_Survey_Q21_3,Please indicate your level of agreement: - Generative AI enhances my creativity.
+Pre_Survey,Pre_Survey_Q21_4,Please indicate your level of agreement: - Generative AI reduces my creative autonomy.
+Pre_Survey,Pre_Survey_Q21_5,Please indicate your level of agreement: - I feel that the AI understands my intentions.
+Pre_Survey,Pre_Survey_Q22,"Considering all your use of generative AI during one week, what percentage of the time do you use it alone versus together with others? - 0% = always together with others... 100% = always alone"
+Pre_Survey,Pre_Survey_Q23,(If working with others) How does collaboration typically take place? - Selected Choice
+Pre_Survey,Pre_Survey_Q23_TEXT,(If working with others) How does collaboration typically take place? - Others (please describe shortly) - Text
+Pre_Survey,Pre_Survey_Q24,Please give me an example for a typical situation in which you use GenAI for image generation.
+Pre_Survey,Pre_Survey_Q25,Please give me an example for when an AI-generated image successfully achieved what you intended.
+Pre_Survey,Pre_Survey_Q26,When does an AI-generated image fail to achieve what you intended?
+Pre_Survey,Pre_Survey_Q27,Is there anything about generative AI image tools that you find problematic or concerning?
+Pre_Survey,Pre_Survey_Q28,How old are you?
+Pre_Survey,Pre_Survey_Q29,What is your gender?
+Pre_Survey,Pre_Survey_Q30,"Thank you sincerely for taking the time to participate in this study! To bring my research to the finish line, IÕm running a short, self-conducted experiment in the form of an online survey (about 25 minutes). As a thank-you for taking part, youÕll be entered into a draw to win two cinema ticket vouchers __! Your participation would genuinely make a difference and help strengthen the studyÕs results. If youÕd like to join, simply leave your email address below and IÕll send you the survey link. If youÕre curious about the results, youÕre very welcome to leave your email to receive a summary of the findings once the study is complete. Would you like to participate in the follow-up study?"
+Pre_Survey,Pre_Survey_Q32,Your Email Address

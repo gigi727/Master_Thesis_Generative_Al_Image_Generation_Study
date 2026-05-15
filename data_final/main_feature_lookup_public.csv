@@ -1,0 +1,81 @@
+survey,variable_name,question_text
+Main_Survey,Main_Survey_StartDate,Start Date
+Main_Survey,Main_Survey_EndDate,End Date
+Main_Survey,Main_Survey_Status,Response Type
+Main_Survey,Main_Survey_Progress,Progress
+Main_Survey,Main_Survey_Duration,Duration
+Main_Survey,Main_Survey_Finished,Finished
+Main_Survey,Main_Survey_RecordedDate,Recorded Date
+Main_Survey,Main_Survey_DistributionChannel,Distribution Channel
+Main_Survey,Main_Survey_UserLanguage,User Language
+Main_Survey,Main_Survey_Q1,"Consent Statement: By clicking ÒI agreeÓ, you confirm that: You are at least 18 years old. You have read and understood the information above. You voluntarily agree to participate in this study. Do you agree to participate in this study?"
+Main_Survey,Main_Survey_Q2,"You previously provided your email address to indicate your interest in participating in the self-experiment - thank you! To strengthen the analysis, we would like to link your responses from the pre-survey with the data from this self-experiment. If you agree, please enter the same email address here so that your responses can be linked across surveys. Your email address will be used exclusively for data linkage, stored separately from the survey responses, deleted after the data has been linked. Therefor the results will not be associated with you in any analyses or publications."
+Main_Survey,Main_Survey_Q4,"Think of some relative or friend whom you frequently see (but who is not with you at present) and consider carefully the picture that comes before your mindÕs eye. Now imagine the exact contours of face, head, shoulders and body."
+Main_Survey,Main_Survey_Q5,"Now imagine that persons characteristic poses of head, attitudes of body etc."
+Main_Survey,Main_Survey_Q6,"Now imagine their precise carriage, length of step, etc., in walking."
+Main_Survey,Main_Survey_Q7,Imagine your relative or close friend wearing a familiar outfit in different colors.
+Main_Survey,Main_Survey_Q8,Visualize a rising sun. Consider carefully the picture that comes before your mindÕs eye. Now imagine the sun rising above the horizon into a hazy sky (dunstiger Himmel).
+Main_Survey,Main_Survey_Q9,The sky clears and surrounds the sun with blueness.
+Main_Survey,Main_Survey_Q10,"Imagine clouds gathering, and then a storm with flashes of lightning."
+Main_Survey,Main_Survey_Q11,A rainbow appears.
+Main_Survey,Main_Survey_Q12,Think of the front of a shop which you often go to. Consider the picture that comes before your mindÕs eye. Imagine the overall appearance of the shop from the opposite side of the road.
+Main_Survey,Main_Survey_Q13,"A window display including colours, shapes and details of individual items."
+Main_Survey,Main_Survey_Q14,"You are near the entrance: the colour, shape and details of the door."
+Main_Survey,Main_Survey_Q15,You enter the shop and go to the counter. The counter assistant serves you. Money changes hands.
+Main_Survey,Main_Survey_Q16,Visualize a country scene
+Main_Survey,Main_Survey_Q17,The colour and shape of the trees.
+Main_Survey,Main_Survey_Q18,The colour and shape of the lake.
+Main_Survey,Main_Survey_Q19,"A strong wind blows on the trees and on the lake, causing waves."
+Main_Survey,Main_Survey_Q21,"In the following task, you will be asked to form a mental image for a word. Unlike the previous questions, some words may refer to abstract concepts (e.g., ideas, values, emotions). There is no right or wrong way to imagine them. People often visualize these words in different ways, such as a symbol, a scene, an object, a person, a place, an atmosphere, or even just colors and shapes. Please take a moment to form a mental image for the following word: ""[Field-target_word]"" Take your time (about 1Ð2 minutes). If it helps, notice what comes to mind first, then add detail. You might consider: what it looks like (colors, shapes, brightness) what it contains (objects, people, symbols) where it is (setting, background, scale, distance) what it feels like (mood, tension, calm, movement) Your image can be figurative or abstract, whatever feels natural. - How vivid is the mental image you are imagining right now?"
+Main_Survey,Main_Survey_Q22,"Please briefly describe your mental image of ""[Field-target_word]"" in 1Ð3 sentences. Describe it as accurately as possible (colors, components, scenes, other elements or the organization of the entire scene)"
+Main_Survey,Main_Survey_Q24,Please copy the prompt you used in the text box below.
+Main_Survey,Main_Survey_Q25_Id,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Id
+Main_Survey,Main_Survey_Q25_Name,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Name
+Main_Survey,Main_Survey_Q25_Size,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Size
+Main_Survey,Main_Survey_Q25_Type,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Type
+Main_Survey,Main_Survey_Q26,Image agreement (overall): How closely does the image you just generated match what you were imagining before you saw it? - 1 = Not at all É 7 = Almost exactly
+Main_Survey,Main_Survey_Q27_1,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The scene or composition (arrangement of elements) matches my mental image."
+Main_Survey,Main_Survey_Q27_2,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The overall atmosphere or style matches my mental image."
+Main_Survey,Main_Survey_Q27_3,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - Important details and components from my mental image are present in this image."
+Main_Survey,Main_Survey_Q28,"Change in Mental Image: Please indicate how much you agree with the following statement: ""My mental image has changed compared to the mental image I had just before generating this AI-generated image."" - 1 = Not changed at all É 7 = Completely changed"
+Main_Survey,Main_Survey_Q29,"If your mental image changed, what aspects changed? Please describe as accurately as possible. - Selected Choice"
+Main_Survey,Main_Survey_Q29_TEXT,"If your mental image changed, what aspects changed? Please describe as accurately as possible. - other (please describe shortly) - Text"
+Main_Survey,Main_Survey_Q30,Do you have any additional comments or thoughts you would like to share?
+Main_Survey,Main_Survey_Q32,Please copy the prompt you used in the text box below.
+Main_Survey,Main_Survey_Q33_Id,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Id
+Main_Survey,Main_Survey_Q33_Name,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Name
+Main_Survey,Main_Survey_Q33_Size,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Size
+Main_Survey,Main_Survey_Q33_Type,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Type
+Main_Survey,Main_Survey_Q34,Image agreement (overall): How closely does the new/second image you just generated match what you were imagining before you saw it? - 1 = Not at all É 7 = Almost exactly
+Main_Survey,Main_Survey_Q35_1,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The scene or composition (arrangement of elements) matches my mental image."
+Main_Survey,Main_Survey_Q35_2,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The overall atmosphere or style matches my mental image."
+Main_Survey,Main_Survey_Q35_3,"Image agreement subscales: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - Important details and components from my mental image are present in this image."
+Main_Survey,Main_Survey_Q36,"Change in Mental Image: Please indicate how much you agree with the following statement: ""My mental image has changed compared to the mental image I had just before generating this AI-generated image."" - 1 = Not changed at all É 7 = Completely changed"
+Main_Survey,Main_Survey_Q37,"If your mental image changed, what aspects changed? Please describe as accurately as possible."
+Main_Survey,Main_Survey_Q38,Do you have any additional comments or thoughts you would like to share?
+Main_Survey,Main_Survey_Q40,Please copy the prompt you used in the text box below.
+Main_Survey,Main_Survey_Q41_Id,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Id
+Main_Survey,Main_Survey_Q41_Name,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Name
+Main_Survey,Main_Survey_Q41_Size,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Size
+Main_Survey,Main_Survey_Q41_Type,Please download your generated image and upload it here (you can also drag and drop the file into this field). - Type
+Main_Survey,Main_Survey_Q42,Image agreement (overall): How closely does the new/third image you just generated match what you were imagining before you saw it? - 1 = Not at all É 7 = Almost exactly
+Main_Survey,Main_Survey_Q43_1,"Specific aspects of image agreement: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The scene or composition (arrangement of elements) matches my mental image."
+Main_Survey,Main_Survey_Q43_2,"Specific aspects of image agreement: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - The overall atmosphere or style matches my mental image."
+Main_Survey,Main_Survey_Q43_3,"Specific aspects of image agreement: Please answer the following questions, whereby 1 = Strongly disagree É 7 = Strongly agree - Important details and components from my mental image are present in this image."
+Main_Survey,Main_Survey_Q44,"Change in Mental Image: Please indicate how much you agree with the following statement: ""My mental image has changed compared to the mental image I had just before generating this AI-generated image."" - 1 = Not changed at all É 7 = Completely changed"
+Main_Survey,Main_Survey_Q45,"If your mental image changed, what aspects changed? Please describe as accurately as possible."
+Main_Survey,Main_Survey_Q46,Do you have any additional comments or thoughts you would like to share?
+Main_Survey,Main_Survey_Q47,"Please describe your current mental image of ""[Field-target_word]""."
+Main_Survey,Main_Survey_Q48,"Similarity to original: How similar is your current mental image to your original one for ""[Field-target_word]""? - 1 = Completely different É 7 = Essentially the same"
+Main_Survey,Main_Survey_Q49,"Source of current image: Which best describes your current mental image of ""[Field-target_word]""?"
+Main_Survey,Main_Survey_Q50,Please think about your current mental image of the word you worked on after completing all image-generation rounds. To what extent is this mental image based on your own original imagination versus the AI-generated images you saw during the task? - Please move the slider to indicate the relative contribution of your own imagination and the AI-generated images.
+Main_Survey,Main_Survey_Q51,Please think about your current mental image of the word you worked on after completing all image-generation rounds. To what extent do you consider yourself versus the AI as the author of your current mental image? - Please move the slider to indicate the relative authorship of your mental image by you versus the AI.
+Main_Survey,Main_Survey_Q52,"Across the entire task, how strongly did the AI-generated images change your mental images? - 1 = Not at all É 7 = Extremely strongly"
+Main_Survey,Main_Survey_Q53,"Across the entire task, did you generally prefer your own mental images or the AI-generated images? - 1 = Strongly prefer my own mental images...7 = Strongly prefer AI-generated images"
+Main_Survey,Main_Survey_Q54,"When your mental image changed, what type of change happened most often? - Selected Choice"
+Main_Survey,Main_Survey_Q54_TEXT,"When your mental image changed, what type of change happened most often? - Other (please describe) - Text"
+Main_Survey,Main_Survey_Q55,How old are you?
+Main_Survey,Main_Survey_Q56,What is your gender?
+Main_Survey,Main_Survey_Q57,"If you are interested in your VVIQ (Vividness of Visual Imagery Questionnaire) score and learning more about the findings of the study, you can leave me your e-mail. - Selected Choice"
+Main_Survey,Main_Survey_Q57_TEXT,"If you are interested in your VVIQ (Vividness of Visual Imagery Questionnaire) score and learning more about the findings of the study, you can leave me your e-mail. - Yes please. (please write your e-mail in the text box below) - Text"
+Main_Survey,Main_Survey_target_word,target_word
