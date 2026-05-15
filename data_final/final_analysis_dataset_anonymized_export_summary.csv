@@ -1,2 +1,0 @@
-object,n_rows,n_columns,n_participants,contains_prompt_coding,contains_dates,contains_age,contains_gender
-final_analysis_dataset_anonymized,46,231,46,TRUE,TRUE,TRUE,FALSE
