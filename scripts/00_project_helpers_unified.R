@@ -1,0 +1,689 @@
+#####################################################################
+### Zentrale Projekt-Hilfsfunktionen                              ###
+#####################################################################
+
+### BESCHREIBUNG ###
+
+# Dieses Skript bündelt methodisch neutrale Hilfsfunktionen, die in
+# mehreren Projekt-Skripten wiederholt vorkommen. Es verändert keine
+# inhaltliche Auswertungslogik, sondern vereinheitlicht:
+# - CSV-Import für hochgeladene Dateien in latin1 / cp1252
+# - CSV-/Excel-Exporte
+# - Plot-Themes
+# - einfache GT-Basisstile
+# - GT-Datei-Exporte
+# - einfache HTML-Indizes für Exportordner
+#
+# WICHTIG:
+# - Die Analysemethodik der bestehenden Skripte bleibt unberührt.
+# - Dieses Skript ist als gemeinsame Infrastruktur gedacht.
+# - Bereits bestehende, skriptspezifische Ableitungslogiken (z. B.
+#   derive_title(), derive_subtitle(), derive_source_note(), spezielle
+#   Row-Grouping-Logik) sollen in den jeweiligen Skripten verbleiben.
+
+# =========================================================
+# 0) Pakete                                              ===
+# =========================================================
+
+library(tidyverse)
+library(readr)
+library(writexl)
+library(gt)
+
+# =========================================================
+# 1) Zentrale Defaults                                   ===
+# =========================================================
+
+project_input_encodings <- c("windows-1252", "latin1", "UTF-8")
+project_missing_tokens  <- c("", "NA", "N/A", "na", "n/a")
+project_csv_export_mode <- "excel_utf8_semicolon"
+
+# =========================================================
+# 2) Pfad- und Ordnerhilfen                              ===
+# =========================================================
+
+ensure_directories <- function(paths) {
+  purrr::walk(paths, ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE))
+}
+
+resolve_first_existing_path <- function(candidates, label = "required file") {
+  existing_candidates <- candidates[file.exists(candidates)]
+
+  if (length(existing_candidates) == 0) {
+    stop(
+      paste0(
+        "The ", label, " could not be found. Expected one of these locations:\n",
+        paste(candidates, collapse = "\n")
+      ),
+      call. = FALSE
+    )
+  }
+
+  existing_candidates[[1]]
+}
+
+# =========================================================
+# 3) Allgemeine Text- und Zahlenhilfen                   ===
+# =========================================================
+
+normalize_missing_text <- function(x) {
+  x <- as.character(x)
+  x <- stringr::str_squish(x)
+  x[x %in% project_missing_tokens] <- NA_character_
+  x
+}
+
+safe_numeric <- function(x) {
+  readr::parse_number(as.character(x), na = project_missing_tokens)
+}
+
+safe_mean <- function(x) {
+  if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
+}
+
+safe_sd <- function(x) {
+  if (sum(!is.na(x)) <= 1) NA_real_ else sd(x, na.rm = TRUE)
+}
+
+safe_median <- function(x) {
+  if (all(is.na(x))) NA_real_ else median(x, na.rm = TRUE)
+}
+
+safe_min <- function(x) {
+  if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
+}
+
+safe_max <- function(x) {
+  if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+}
+
+pct <- function(x, base, digits = 1) {
+  ifelse(is.na(base) | base == 0, NA_real_, round(100 * x / base, digits))
+}
+
+first_nonmissing <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  x <- as.character(x)
+  x <- x[!is.na(x) & stringr::str_squish(x) != ""]
+  if (length(x) == 0) NA_character_ else x[1]
+}
+
+collapse_unique <- function(x) {
+  if (is.null(x) || length(x) == 0) return(NA_character_)
+  x <- as.character(x)
+  x <- unique(x[!is.na(x) & stringr::str_squish(x) != ""])
+  if (length(x) == 0) return(NA_character_)
+  if (length(x) == 1) return(x)
+  paste(x, collapse = "; ")
+}
+
+# =========================================================
+# 4) CSV-Import für latin1 / cp1252                      ===
+# =========================================================
+
+count_fixed <- function(text, pattern) {
+  matches <- gregexpr(pattern, text, fixed = TRUE)[[1]]
+  if (identical(matches, -1L)) 0L else length(matches)
+}
+
+detect_csv_delimiter <- function(path, encoding = project_input_encodings[[1]]) {
+  first_line <- readLines(path, n = 1, warn = FALSE, encoding = encoding)
+  n_semicolon <- count_fixed(first_line, ";")
+  n_comma     <- count_fixed(first_line, ",")
+  ifelse(n_semicolon > n_comma, ";", ",")
+}
+
+read_csv_auto <- function(path,
+                          encodings = project_input_encodings,
+                          na_tokens = project_missing_tokens,
+                          trim_ws = TRUE,
+                          col_types = readr::cols(.default = readr::col_character())) {
+
+  delim <- detect_csv_delimiter(path, encoding = encodings[[1]])
+  last_error <- NULL
+
+  for (enc in encodings) {
+    attempt <- tryCatch(
+      {
+        readr::read_delim(
+          file = path,
+          delim = delim,
+          col_types = col_types,
+          na = na_tokens,
+          locale = readr::locale(encoding = enc),
+          show_col_types = FALSE,
+          name_repair = "minimal",
+          trim_ws = trim_ws
+        )
+      },
+      error = function(e) e
+    )
+
+    if (!inherits(attempt, "error")) {
+      attr(attempt, "source_encoding") <- enc
+      attr(attempt, "source_delimiter") <- delim
+      return(attempt)
+    }
+
+    last_error <- attempt
+  }
+
+  stop(
+    paste0(
+      "The CSV file could not be read with the configured encodings (",
+      paste(encodings, collapse = ", "),
+      "). Last error: ",
+      last_error$message
+    ),
+    call. = FALSE
+  )
+}
+
+# =========================================================
+# 5) Einheitliche CSV-/Excel-Exporte                     ===
+# =========================================================
+
+write_csv_project <- function(df, path, mode = project_csv_export_mode, na = "") {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  if (identical(mode, "excel_utf8_semicolon")) {
+    readr::write_excel_csv2(df, file = path, na = na)
+  } else if (identical(mode, "excel_utf8_comma")) {
+    readr::write_excel_csv(df, file = path, na = na)
+  } else if (identical(mode, "utf8_comma")) {
+    readr::write_csv(df, file = path, na = na)
+  } else if (identical(mode, "utf8_semicolon")) {
+    readr::write_csv2(df, file = path, na = na)
+  } else {
+    stop(
+      paste0(
+        "Unknown CSV export mode: ", mode,
+        ". Supported modes are: excel_utf8_semicolon, excel_utf8_comma, utf8_comma, utf8_semicolon."
+      ),
+      call. = FALSE
+    )
+  }
+}
+
+save_table_outputs <- function(df,
+                               base_filename,
+                               out_dir,
+                               csv_mode = project_csv_export_mode) {
+  csv_path  <- file.path(out_dir, paste0(base_filename, ".csv"))
+  xlsx_path <- file.path(out_dir, paste0(base_filename, ".xlsx"))
+
+  write_csv_project(df, csv_path, mode = csv_mode)
+  writexl::write_xlsx(df, path = xlsx_path)
+
+  invisible(
+    list(
+      csv_file = csv_path,
+      xlsx_file = xlsx_path
+    )
+  )
+}
+
+# =========================================================
+# 6) Einheitlicher Plot-Stil                             ===
+# =========================================================
+
+theme_result <- function() {
+  ggplot2::theme_minimal(base_size = 12) +
+    ggplot2::theme(
+      plot.title = ggplot2::element_text(face = "bold", size = 13),
+      plot.subtitle = ggplot2::element_text(size = 10),
+      axis.title = ggplot2::element_text(face = "bold"),
+      strip.text = ggplot2::element_text(face = "bold"),
+      panel.grid.minor = ggplot2::element_blank(),
+      legend.position = "bottom",
+      legend.direction = "horizontal"
+    )
+}
+
+# =========================================================
+# 7) Einheitlicher GT-Basisstil                          ===
+# =========================================================
+
+make_gt_table_standard <- function(df,
+                                   title_text,
+                                   subtitle_text = NULL,
+                                   source_note = NULL) {
+  gt_tbl <- gt::gt(df) %>%
+    gt::tab_header(
+      title = title_text,
+      subtitle = subtitle_text
+    ) %>%
+    gt::tab_options(
+      table.font.size = 12,
+      heading.title.font.size = 14,
+      data_row.padding = gt::px(4),
+      table.width = gt::pct(100)
+    ) %>%
+    gt::opt_row_striping() %>%
+    gt::fmt_missing(columns = everything(), missing_text = "—")
+
+  if (!is.null(source_note) && !is.na(source_note) && nzchar(source_note)) {
+    gt_tbl <- gt_tbl %>%
+      gt::tab_source_note(source_note)
+  }
+
+  gt_tbl
+}
+
+save_gt_table <- function(gt_tbl, file_stem, out_gt_html_dir, out_gt_rtf_dir = NULL) {
+  html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
+  saved_rtf <- NA_character_
+
+  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
+  gt::gtsave(gt_tbl, filename = html_path)
+
+  if (!is.null(out_gt_rtf_dir)) {
+    dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
+    rtf_path <- file.path(out_gt_rtf_dir, paste0(file_stem, ".rtf"))
+
+    tryCatch(
+      {
+        gt::gtsave(gt_tbl, filename = rtf_path)
+        saved_rtf <- rtf_path
+      },
+      error = function(e) {
+        message(
+          "Note: RTF export failed for '", file_stem,
+          "'. HTML export still succeeded. Details: ", e$message
+        )
+      }
+    )
+  }
+
+  tibble::tibble(
+    object_name = file_stem,
+    html_file = html_path,
+    rtf_file = saved_rtf
+  )
+}
+
+# =========================================================
+# 8) Einheitlicher HTML-Index                            ===
+# =========================================================
+
+html_escape_simple <- function(x) {
+  x <- as.character(x)
+  x <- gsub("&", "&amp;", x, fixed = TRUE)
+  x <- gsub("<", "&lt;", x, fixed = TRUE)
+  x <- gsub(">", "&gt;", x, fixed = TRUE)
+  x <- gsub('"', "&quot;", x, fixed = TRUE)
+  x
+}
+
+build_simple_html_index <- function(manifest,
+                                    output_path,
+                                    title_text,
+                                    intro_text,
+                                    column_order = c("object_name", "variable_name", "question_focus", "analysis_type", "html_file", "rtf_file"),
+                                    display_labels = c(
+                                      object_name = "Object",
+                                      variable_name = "Variable",
+                                      question_focus = "Question focus",
+                                      analysis_type = "Analysis type",
+                                      html_file = "HTML",
+                                      rtf_file = "RTF"
+                                    )) {
+  manifest <- manifest %>%
+    dplyr::select(dplyr::any_of(column_order))
+
+  make_file_cell <- function(html_file, rtf_file) {
+    html_part <- if (!is.na(html_file) && nzchar(html_file)) {
+      paste0('<a href="html/', basename(html_file), '">HTML</a>')
+    } else {
+      ""
+    }
+
+    rtf_part <- if (!is.na(rtf_file) && nzchar(rtf_file)) {
+      paste0('<a href="rtf/', basename(rtf_file), '">RTF</a>')
+    } else {
+      ""
+    }
+
+    paste(c(html_part, rtf_part), collapse = ifelse(nzchar(html_part) & nzchar(rtf_part), " | ", ""))
+  }
+
+  header_cols <- names(manifest)
+
+  if (all(c("html_file", "rtf_file") %in% names(manifest))) {
+    file_cell <- purrr::map2_chr(manifest$html_file, manifest$rtf_file, make_file_cell)
+    manifest <- manifest %>%
+      dplyr::mutate(Files = file_cell) %>%
+      dplyr::select(-html_file, -rtf_file)
+    header_cols <- names(manifest)
+  }
+
+  index_rows <- apply(manifest, 1, function(row_values) {
+    cells <- purrr::imap_chr(
+      as.list(row_values),
+      function(value, nm) {
+        if (identical(nm, "Files")) {
+          paste0("<td>", value, "</td>")
+        } else {
+          paste0(
+            "<td>",
+            html_escape_simple(ifelse(is.na(value), "", as.character(value))),
+            "</td>"
+          )
+        }
+      }
+    )
+
+    paste0("<tr>", paste(cells, collapse = ""), "</tr>")
+  })
+
+  header_html <- paste0(
+    "<tr>",
+    paste0(
+      "<th>",
+      html_escape_simple(ifelse(is.na(display_labels[header_cols]), header_cols, display_labels[header_cols])),
+      "</th>",
+      collapse = ""
+    ),
+    "</tr>"
+  )
+
+  index_html <- c(
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head>",
+    "  <meta charset=\"utf-8\">",
+    paste0("  <title>", html_escape_simple(title_text), "</title>"),
+    "  <style>",
+    "    body { font-family: Arial, sans-serif; margin: 24px; }",
+    "    h1, h2 { margin-bottom: 8px; }",
+    "    table { border-collapse: collapse; width: 100%; margin-top: 16px; }",
+    "    th, td { border: 1px solid #d9d9d9; padding: 8px; text-align: left; vertical-align: top; }",
+    "    th { background: #f5f5f5; }",
+    "    tr:nth-child(even) { background: #fafafa; }",
+    "  </style>",
+    "</head>",
+    "<body>",
+    paste0("  <h1>", html_escape_simple(title_text), "</h1>"),
+    paste0("  <p>", html_escape_simple(intro_text), "</p>"),
+    paste0("  <p><strong>Total entries:</strong> ", nrow(manifest), "</p>"),
+    "  <table>",
+    "    <thead>",
+    paste0("      ", header_html),
+    "    </thead>",
+    "    <tbody>",
+    index_rows,
+    "    </tbody>",
+    "  </table>",
+    "</body>",
+    "</html>"
+  )
+
+  dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+  writeLines(index_html, con = output_path)
+
+  invisible(output_path)
+}
+
+
+# =========================================================
+# 9) Allgemeiner Export-Index                            ===
+# =========================================================
+
+make_relative_path_safe <- function(path, from_dir) {
+  if (is.na(path) || !nzchar(path)) return(NA_character_)
+  if (!file.exists(path)) return(NA_character_)
+
+  split_path <- function(x) {
+    strsplit(
+      normalizePath(x, winslash = "/", mustWork = TRUE),
+      "/",
+      fixed = TRUE
+    )[[1]]
+  }
+
+  from_parts <- split_path(from_dir)
+  to_parts   <- split_path(path)
+
+  common_len <- 0L
+  max_common <- min(length(from_parts), length(to_parts))
+
+  while (common_len < max_common &&
+         identical(from_parts[common_len + 1], to_parts[common_len + 1])) {
+    common_len <- common_len + 1L
+  }
+
+  up_parts <- if (common_len < length(from_parts)) {
+    rep("..", length(from_parts) - common_len)
+  } else {
+    character(0)
+  }
+
+  down_parts <- if (common_len < length(to_parts)) {
+    to_parts[(common_len + 1):length(to_parts)]
+  } else {
+    character(0)
+  }
+
+  rel_parts <- c(up_parts, down_parts)
+
+  if (length(rel_parts) == 0) "." else paste(rel_parts, collapse = "/")
+}
+
+build_general_export_index <- function(manifest,
+                                       output_path,
+                                       title_text,
+                                       intro_text,
+                                       path_col = "path",
+                                       label_col = "label",
+                                       notes_col = "notes") {
+  manifest <- manifest %>%
+    dplyr::mutate(
+      link_rel = purrr::map_chr(.data[[path_col]], make_relative_path_safe, from_dir = dirname(output_path)),
+      exists = !is.na(link_rel)
+    )
+
+  make_link_cell <- function(rel_path, label, exists) {
+    if (!isTRUE(exists) || is.na(rel_path) || !nzchar(rel_path)) {
+      return("noch nicht vorhanden")
+    }
+    paste0('<a href="', html_escape_simple(rel_path), '">', html_escape_simple(label), '</a>')
+  }
+
+  header_html <- paste0(
+    "<tr>",
+    "<th>Datei</th>",
+    "<th>Pfad</th>",
+    "<th>Hinweis</th>",
+    "</tr>"
+  )
+
+  row_html <- purrr::pmap_chr(
+    list(manifest$link_rel, manifest[[label_col]], manifest$exists, manifest[[notes_col]]),
+    function(rel_path, label, exists, notes) {
+      link_cell <- make_link_cell(rel_path, label, exists)
+      path_cell <- if (isTRUE(exists) && !is.na(rel_path)) html_escape_simple(rel_path) else ""
+      notes_cell <- ifelse(is.na(notes), "", html_escape_simple(as.character(notes)))
+      paste0(
+        "<tr>",
+        "<td>", link_cell, "</td>",
+        "<td>", path_cell, "</td>",
+        "<td>", notes_cell, "</td>",
+        "</tr>"
+      )
+    }
+  )
+
+  index_html <- c(
+    "<!DOCTYPE html>",
+    "<html>",
+    "<head>",
+    '  <meta charset="utf-8">',
+    paste0("  <title>", html_escape_simple(title_text), "</title>"),
+    "  <style>",
+    "    body { font-family: Arial, sans-serif; margin: 24px; }",
+    "    h1, h2 { margin-bottom: 8px; }",
+    "    table { border-collapse: collapse; width: 100%; margin-top: 16px; }",
+    "    th, td { border: 1px solid #d9d9d9; padding: 8px; text-align: left; vertical-align: top; }",
+    "    th { background: #f5f5f5; }",
+    "    tr:nth-child(even) { background: #fafafa; }",
+    "  </style>",
+    "</head>",
+    "<body>",
+    paste0("  <h1>", html_escape_simple(title_text), "</h1>"),
+    paste0("  <p>", html_escape_simple(intro_text), "</p>"),
+    paste0("  <p><strong>Total entries:</strong> ", nrow(manifest), "</p>"),
+    "  <table>",
+    "    <thead>",
+    paste0("      ", header_html),
+    "    </thead>",
+    "    <tbody>",
+    row_html,
+    "    </tbody>",
+    "  </table>",
+    "</body>",
+    "</html>"
+  )
+
+  dir.create(dirname(output_path), recursive = TRUE, showWarnings = FALSE)
+  writeLines(index_html, con = output_path)
+
+  invisible(output_path)
+}
+
+
+get_output_dir <- function(script_id) {
+  dir <- file.path("data_output", script_id)
+
+  if (!dir.exists(dir)) {
+    dir.create(dir, recursive = TRUE)
+  }
+
+  return(dir)
+}
+
+
+# =========================================================
+# 13) Publikationsnahe GT-Exporte für Research-Outputs     ===
+# =========================================================
+# Diese Helper verändern keine Analyse- oder Tabellenmethodik.
+# Sie erzeugen aus bereits berechneten Tabellen zusätzliche HTML-/RTF-
+# Versionen, damit Skript 99 sie im Ordner "Output for Research" sammeln kann.
+
+sanitize_research_file_stem <- function(x) {
+  x <- as.character(x)
+  x <- stringr::str_replace_all(x, "[^A-Za-z0-9_\\-]+", "_")
+  x <- stringr::str_replace_all(x, "_+", "_")
+  x <- stringr::str_replace_all(x, "^_|_$", "")
+  ifelse(is.na(x) | x == "", "table", x)
+}
+
+coerce_table_for_gt <- function(x) {
+  if (inherits(x, "data.frame")) {
+    return(tibble::as_tibble(x))
+  }
+
+  if (inherits(x, "table")) {
+    return(as.data.frame(x))
+  }
+
+  if (is.matrix(x)) {
+    return(tibble::as_tibble(as.data.frame(x)))
+  }
+
+  if (inherits(x, "anova")) {
+    return(tibble::as_tibble(as.data.frame(x), rownames = "term"))
+  }
+
+  if (is.atomic(x) && !is.null(names(x))) {
+    return(tibble::tibble(name = names(x), value = as.character(x)))
+  }
+
+  NULL
+}
+
+save_table_collection_as_gt <- function(table_list,
+                                        out_gt_html_dir,
+                                        out_gt_rtf_dir,
+                                        out_gt_doc_dir = NULL,
+                                        manifest_base_filename = "00_gt_manifest",
+                                        index_title = "Formatted GT tables",
+                                        index_intro = "This index links to all formatted HTML and RTF tables.",
+                                        source_note = NULL) {
+  if (!requireNamespace("gt", quietly = TRUE)) {
+    stop("Package 'gt' is required for HTML/RTF table export.", call. = FALSE)
+  }
+
+  if (is.null(names(table_list)) || any(names(table_list) == "")) {
+    names(table_list) <- paste0("table_", seq_along(table_list))
+  }
+
+  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
+  dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
+
+  if (!is.null(out_gt_doc_dir)) {
+    dir.create(out_gt_doc_dir, recursive = TRUE, showWarnings = FALSE)
+  }
+
+  gt_manifest <- purrr::imap_dfr(
+    table_list,
+    function(tbl, object_name) {
+      df <- coerce_table_for_gt(tbl)
+
+      if (is.null(df)) {
+        return(tibble::tibble(
+          object_name = object_name,
+          html_file = NA_character_,
+          rtf_file = NA_character_,
+          note = "Skipped: object could not be converted to a tabular data frame."
+        ))
+      }
+
+      file_stem <- sanitize_research_file_stem(object_name)
+
+      gt_tbl <- make_gt_table_standard(
+        df = df,
+        title_text = stringr::str_replace_all(object_name, "_", " "),
+        subtitle_text = NULL,
+        source_note = source_note
+      )
+
+      saved <- save_gt_table(
+        gt_tbl = gt_tbl,
+        file_stem = file_stem,
+        out_gt_html_dir = out_gt_html_dir,
+        out_gt_rtf_dir = out_gt_rtf_dir
+      )
+
+      saved %>%
+        dplyr::mutate(note = "Publication-oriented GT export")
+    }
+  )
+
+  if (!is.null(out_gt_doc_dir)) {
+    save_table_outputs(
+      gt_manifest,
+      base_filename = manifest_base_filename,
+      out_dir = out_gt_doc_dir
+    )
+
+    build_simple_html_index(
+      manifest = gt_manifest,
+      output_path = file.path(dirname(out_gt_html_dir), "00_gt_index.html"),
+      title_text = index_title,
+      intro_text = index_intro
+    )
+
+    writeLines(
+      c(
+        paste0("GT HTML directory: ", out_gt_html_dir),
+        paste0("GT RTF directory: ", out_gt_rtf_dir),
+        "",
+        capture.output(print(gt_manifest))
+      ),
+      con = file.path(out_gt_doc_dir, paste0(manifest_base_filename, "_console_summary.txt"))
+    )
+  }
+
+  invisible(gt_manifest)
+}
+

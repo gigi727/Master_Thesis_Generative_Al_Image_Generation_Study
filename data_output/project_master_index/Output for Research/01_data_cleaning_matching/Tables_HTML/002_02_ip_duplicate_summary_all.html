@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset='utf-8'>
+  <title>Duplicate IP Summary</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; line-height: 1.5; }
+    h1 { margin-bottom: 16px; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ddd; padding: 6px 8px; }
+    th { background: #f3f3f3; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>Duplicate IP Summary</h1>
+<table>
+ <thead>
+  <tr>
+   <th style="text-align:left;"> dataset </th>
+   <th style="text-align:left;"> data_cleaning_step </th>
+   <th style="text-align:right;"> n_rows_with_duplicate_ip </th>
+   <th style="text-align:right;"> n_unique_duplicate_ips </th>
+  </tr>
+ </thead>
+<tbody>
+  <tr>
+   <td style="text-align:left;"> Pre_Survey </td>
+   <td style="text-align:left;"> DC2_Duplicate_IPs_flagged </td>
+   <td style="text-align:right;"> 30 </td>
+   <td style="text-align:right;"> 11 </td>
+  </tr>
+  <tr>
+   <td style="text-align:left;"> Main_Survey </td>
+   <td style="text-align:left;"> DC2_Duplicate_IPs_flagged </td>
+   <td style="text-align:right;"> 16 </td>
+   <td style="text-align:right;"> 6 </td>
+  </tr>
+</tbody>
+</table>
+</body>
+</html>
