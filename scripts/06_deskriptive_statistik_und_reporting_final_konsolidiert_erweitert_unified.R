@@ -41,6 +41,8 @@ library(here)
 library(scales)
 library(readr)
 library(gt)
+library(grid)
+library(gridExtra)
 
 # =========================================================
 # 1) Pfade und Abhängigkeiten                            ===
@@ -67,159 +69,6 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-#####################################################################
-### DOCX-SAFE GT EXPORT COMPATIBILITY (ADDED)                     ###
-#####################################################################
-
-# This wrapper keeps the existing HTML/RTF export logic intact and adds
-# DOCX output without changing any analysis or table-construction method.
-# It also remains compatible with older versions of 00_project_helpers_unified.R
-# where save_gt_table() did not yet accept out_gt_docx_dir.
-save_gt_table_docx_safe <- function(gt_tbl,
-                                    file_stem,
-                                    out_gt_html_dir,
-                                    out_gt_rtf_dir = NULL,
-                                    out_gt_docx_dir = NULL) {
-  if (
-    exists("save_gt_table", mode = "function") &&
-      "out_gt_docx_dir" %in% names(formals(save_gt_table))
-  ) {
-    return(
-      save_gt_table(
-        gt_tbl = gt_tbl,
-        file_stem = file_stem,
-        out_gt_html_dir = out_gt_html_dir,
-        out_gt_rtf_dir = out_gt_rtf_dir,
-        out_gt_docx_dir = out_gt_docx_dir
-      )
-    )
-  }
-
-  html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
-  saved_rtf <- NA_character_
-  saved_docx <- NA_character_
-
-  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
-  gt::gtsave(gt_tbl, filename = html_path)
-
-  if (!is.null(out_gt_rtf_dir)) {
-    dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
-    rtf_path <- file.path(out_gt_rtf_dir, paste0(file_stem, ".rtf"))
-
-    tryCatch(
-      {
-        gt::gtsave(gt_tbl, filename = rtf_path)
-        saved_rtf <- rtf_path
-      },
-      error = function(e) {
-        message(
-          "Note: RTF export failed for '", file_stem,
-          "'. HTML export still succeeded. Details: ", e$message
-        )
-      }
-    )
-  }
-
-  if (!is.null(out_gt_docx_dir)) {
-    dir.create(out_gt_docx_dir, recursive = TRUE, showWarnings = FALSE)
-    docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
-
-    source_data <- attr(gt_tbl, "docx_source_data", exact = TRUE)
-    if (is.null(source_data) && "_data" %in% names(gt_tbl) && is.data.frame(gt_tbl[["_data"]])) {
-      source_data <- gt_tbl[["_data"]]
-    }
-
-    title_text <- attr(gt_tbl, "docx_title_text", exact = TRUE)
-    if (is.null(title_text) || is.na(title_text) || !nzchar(as.character(title_text))) {
-      title_text <- file_stem
-    }
-
-    subtitle_text <- attr(gt_tbl, "docx_subtitle_text", exact = TRUE)
-    source_note <- attr(gt_tbl, "docx_source_note", exact = TRUE)
-
-    if (!is.null(source_data)) {
-      tryCatch(
-        {
-          if (exists("save_docx_table", mode = "function")) {
-            save_docx_table(
-              source_data,
-              path = docx_path,
-              title_text = title_text,
-              subtitle_text = subtitle_text,
-              source_note = source_note
-            )
-          } else {
-            if (!requireNamespace("flextable", quietly = TRUE) || !requireNamespace("officer", quietly = TRUE)) {
-              stop("Packages 'flextable' and 'officer' are required for DOCX export.")
-            }
-
-            source_data <- as.data.frame(source_data, stringsAsFactors = FALSE)
-            source_data[] <- lapply(source_data, function(x) {
-              if (inherits(x, "POSIXt") || inherits(x, "Date")) return(as.character(x))
-              if (is.factor(x)) return(as.character(x))
-              if (is.list(x)) return(vapply(x, function(z) paste(as.character(z), collapse = "; "), character(1)))
-              x
-            })
-
-            border_main <- officer::fp_border(color = "#666666", width = 1.25)
-
-            ft <- flextable::flextable(source_data) %>%
-              flextable::border_remove() %>%
-              flextable::hline_top(part = "header", border = border_main) %>%
-              flextable::hline_bottom(part = "header", border = border_main) %>%
-              flextable::hline_bottom(part = "body", border = border_main) %>%
-              flextable::bold(part = "header") %>%
-              flextable::font(fontname = "Arial", part = "all") %>%
-              flextable::fontsize(size = 9, part = "all") %>%
-              flextable::align(align = "left", part = "all") %>%
-              flextable::valign(valign = "top", part = "all") %>%
-              flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
-              flextable::set_table_properties(layout = "autofit", width = 1) %>%
-              flextable::autofit()
-
-            header_lines <- c(title_text, subtitle_text)
-            header_lines <- header_lines[!is.na(header_lines) & nzchar(as.character(header_lines))]
-            if (length(header_lines) > 0) {
-              for (header_line in rev(header_lines)) {
-                ft <- ft %>% flextable::add_header_lines(values = header_line)
-              }
-              ft <- ft %>%
-                flextable::bold(i = 1, part = "header") %>%
-                flextable::fontsize(i = 1, size = 10, part = "header")
-            }
-
-            if (!is.null(source_note) && !is.na(source_note) && nzchar(as.character(source_note))) {
-              ft <- ft %>%
-                flextable::add_footer_lines(values = source_note) %>%
-                flextable::italic(part = "footer") %>%
-                flextable::fontsize(size = 8, part = "footer")
-            }
-
-            flextable::save_as_docx(ft, path = docx_path)
-          }
-          saved_docx <- docx_path
-        },
-        error = function(e) {
-          message(
-            "Note: DOCX export failed for '", file_stem,
-            "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
-          )
-        }
-      )
-    } else {
-      message("Note: DOCX export skipped for '", file_stem, "' because no source data were available in the gt object.")
-    }
-  }
-
-  tibble::tibble(
-    object_name = file_stem,
-    html_file = html_path,
-    rtf_file = saved_rtf,
-    docx_file = saved_docx
-  )
-}
-
-
 output_dir <- get_output_dir("05")
 
 out_desc_dir     <- file.path(project_root, "data_output", "descriptives")
@@ -241,7 +90,6 @@ out_requested_captions <- file.path(out_requested_dir, "captions")
 out_gt_dir             <- file.path(out_desc_dir, "gt_tables")
 out_gt_html_dir        <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir         <- file.path(out_gt_dir, "rtf")
-out_gt_docx_dir        <- file.path(out_gt_dir, "docx")
 out_gt_doc_dir         <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
@@ -249,7 +97,7 @@ purrr::walk(
     out_desc_dir, out_tables_dir, out_figures_dir, out_captions_dir,
     out_extended_dir, out_extended_tables, out_extended_figures, out_extended_captions,
     out_requested_dir, out_requested_tables, out_requested_figures, out_requested_captions,
-    out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_docx_dir, out_gt_doc_dir
+    out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir
   ),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
@@ -389,21 +237,11 @@ summarise_raw_dataset <- function(df, cfg, dataset_label) {
 save_table_outputs <- function(df, base_filename, out_dir = out_tables_dir) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
-
-  tryCatch(
-    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
-    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
-  )
 }
 
 save_extended_table_outputs <- function(df, base_filename, out_dir = out_extended_tables) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
-
-  tryCatch(
-    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
-    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
-  )
 }
 
 make_numeric_desc <- function(df, var, var_label, dataset_label) {
@@ -563,17 +401,12 @@ make_gt_table <- function(data, title_text, subtitle_text = NULL) {
       data_row.padding = px(4)
     )
 
-  attach_gt_docx_source(gt_tbl, data, title_text, subtitle_text, NULL)
+  return(gt_tbl)
 }
 
 save_requested_table_outputs <- function(df, base_filename, out_dir = out_requested_tables) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
-
-  tryCatch(
-    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
-    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
-  )
 }
 
 get_variable_label <- function(var_name) {
@@ -1667,41 +1500,77 @@ main_q50_boxplot_stats_table <- main_q50_boxplot_data %>%
   mutate(category_group = as.character(category_group))
 
 
-main_q50_boxplot_caption <- main_q50_boxplot_stats_table %>%
-  mutate(
-    caption_part = paste0(
-      category_group,
-      ": n=", n_valid,
-      ", M=", mean,
-      ", Mdn=", median,
-      ", Q1=", q1,
-      ", Q3=", q3,
-      ", Min=", min,
-      ", Max=", max
-    )
-  ) %>%
-  pull(caption_part) %>%
-  paste(collapse = " | ")
+# ---------------------------------------------------------
+# ReqFig5: Main_Survey_Q50 boxplot with table-style remark
+# ---------------------------------------------------------
 
-plot_main_q50_boxplot_overall_category <- ggplot(
+main_q50_question_title <- get_variable_label("Main_Survey_Q50")
+
+if (
+  is.na(main_q50_question_title) ||
+  !nzchar(main_q50_question_title) ||
+  main_q50_question_title == "Main_Survey_Q50"
+) {
+  main_q50_question_title <- "Contribution of own imagination vs. AI"
+}
+
+main_q50_question_title <- stringr::str_wrap(main_q50_question_title, width = 90)
+main_q50_question_subtitle <- "Question No. Main_Survey_Q50"
+
+main_q50_boxplot_stats_table_for_plot <- main_q50_boxplot_stats_table %>%
+  transmute(
+    `Target word category` = category_group,
+    `n` = n_valid,
+    `Mean` = sprintf("%.2f", mean),
+    `Median` = sprintf("%.2f", median),
+    `Q1` = sprintf("%.2f", q1),
+    `Q3` = sprintf("%.2f", q3),
+    `Min` = sprintf("%.2f", min),
+    `Max` = sprintf("%.2f", max)
+  )
+
+main_q50_boxplot_stats_grob <- gridExtra::tableGrob(
+  main_q50_boxplot_stats_table_for_plot,
+  rows = NULL,
+  theme = gridExtra::ttheme_minimal(
+    base_size = 9,
+    core = list(
+      fg_params = list(hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    ),
+    colhead = list(
+      fg_params = list(fontface = "bold", hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    )
+  )
+)
+
+plot_main_q50_boxplot_overall_category_base <- ggplot(
   main_q50_boxplot_data,
   aes(x = category_group, y = q50_value)
 ) +
   geom_boxplot(width = 0.45, outlier.alpha = 0.7) +
   facet_wrap(~ category_group, nrow = 1) +
   labs(
-    title = "Main_Survey_Q50 by target word category",
-    subtitle = "Boxplots for Overall, abstract and concrete target words",
+    title = main_q50_question_title,
+    subtitle = main_q50_question_subtitle,
     x = NULL,
-    y = "Main_Survey_Q50",
-    caption = main_q50_boxplot_caption
+    y = "Slider value (0–100)"
   ) +
   theme_result() +
   theme(
     axis.text.x = element_blank(),
     axis.ticks.x = element_blank(),
-    plot.caption = element_text(hjust = 0, size = 9)
+    plot.caption = element_blank(),
+    plot.margin = margin(10, 10, 10, 10)
   )
+
+plot_main_q50_boxplot_overall_category <- gridExtra::arrangeGrob(
+  plot_main_q50_boxplot_overall_category_base,
+  main_q50_boxplot_stats_grob,
+  ncol = 1,
+  heights = c(4.8, 1.2)
+)
 
 
 
@@ -2087,7 +1956,14 @@ ggsave(file.path(out_figures_dir, "Fig1_cleaning_flow.png"), plot_cleaning_flow,
 ggsave(file.path(out_figures_dir, "Fig2_followup_selection.png"), plot_followup_selection, width = 8, height = 5, dpi = 300)
 ggsave(file.path(out_figures_dir, "Fig3_email_matching_summary.png"), plot_email_matching, width = 8, height = 5, dpi = 300)
 ggsave(file.path(out_figures_dir, "Fig4_viviq_distribution.png"), plot_viviq_distribution, width = 8, height = 5, dpi = 300)
-ggsave(file.path(out_requested_figures, "ReqFig5_main_q50_boxplot_overall_category.png"),plot_main_q50_boxplot_overall_category, width = 12, height = 6, dpi = 300)
+ggsave(
+  file.path(out_requested_figures, "ReqFig5_main_q50_boxplot_overall_category.png"),
+  plot_main_q50_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
 
 if (!is.null(plot_age_distribution)) {
   ggsave(file.path(out_extended_figures, "ExtFig1_age_distribution.png"), plot_age_distribution, width = 8, height = 5, dpi = 300)
@@ -2203,7 +2079,14 @@ ggsave(file.path(out_requested_figures, "ReqFig1_longitudinal_group_1.png"), plo
 ggsave(file.path(out_requested_figures, "ReqFig2_longitudinal_group_2.png"), plot_longitudinal_group_2, width = 8, height = 5, dpi = 300)
 ggsave(file.path(out_requested_figures, "ReqFig3_longitudinal_group_3.png"), plot_longitudinal_group_3, width = 8, height = 5, dpi = 300)
 ggsave(file.path(out_requested_figures, "ReqFig4_longitudinal_block.png"), plot_longitudinal_block, width = 10, height = 6, dpi = 300)
-ggsave(file.path(out_requested_figures, "ReqFig5_main_q50_boxplot_overall_category.png"), plot_main_q50_boxplot_overall_category, width = 12, height = 6, dpi = 300)
+ggsave(
+  file.path(out_requested_figures, "ReqFig5_main_q50_boxplot_overall_category.png"),
+  plot_main_q50_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
 
 
 #####################################################################
@@ -2699,12 +2582,11 @@ gt_output_list <- list(
 gt_manifest <- purrr::imap_dfr(
   gt_output_list,
   function(gt_tbl, object_name) {
-    save_gt_table_docx_safe(
+    save_gt_table(
       gt_tbl = gt_tbl,
       file_stem = object_name,
       out_gt_html_dir = out_gt_html_dir,
-      out_gt_rtf_dir = out_gt_rtf_dir,
-      out_gt_docx_dir = out_gt_docx_dir
+      out_gt_rtf_dir = out_gt_rtf_dir
     )
   }
 )
@@ -2741,7 +2623,6 @@ gt_console_summary <- c(
   "",
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
-  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", gt_index_path)                    # CHANGED
 )
 
@@ -2753,7 +2634,6 @@ writeLines(
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
-message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", gt_index_path)                     # CHANGED
 message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
 
@@ -2769,7 +2649,6 @@ gt_console_summary <- c(
   "",
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
-  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
 )
 
@@ -2781,7 +2660,6 @@ writeLines(
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
-message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
 message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
 
