@@ -67,7 +67,160 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-output_dir <- get_output_dir("06")
+#####################################################################
+### DOCX-SAFE GT EXPORT COMPATIBILITY (ADDED)                     ###
+#####################################################################
+
+# This wrapper keeps the existing HTML/RTF export logic intact and adds
+# DOCX output without changing any analysis or table-construction method.
+# It also remains compatible with older versions of 00_project_helpers_unified.R
+# where save_gt_table() did not yet accept out_gt_docx_dir.
+save_gt_table_docx_safe <- function(gt_tbl,
+                                    file_stem,
+                                    out_gt_html_dir,
+                                    out_gt_rtf_dir = NULL,
+                                    out_gt_docx_dir = NULL) {
+  if (
+    exists("save_gt_table", mode = "function") &&
+      "out_gt_docx_dir" %in% names(formals(save_gt_table))
+  ) {
+    return(
+      save_gt_table(
+        gt_tbl = gt_tbl,
+        file_stem = file_stem,
+        out_gt_html_dir = out_gt_html_dir,
+        out_gt_rtf_dir = out_gt_rtf_dir,
+        out_gt_docx_dir = out_gt_docx_dir
+      )
+    )
+  }
+
+  html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
+  saved_rtf <- NA_character_
+  saved_docx <- NA_character_
+
+  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
+  gt::gtsave(gt_tbl, filename = html_path)
+
+  if (!is.null(out_gt_rtf_dir)) {
+    dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
+    rtf_path <- file.path(out_gt_rtf_dir, paste0(file_stem, ".rtf"))
+
+    tryCatch(
+      {
+        gt::gtsave(gt_tbl, filename = rtf_path)
+        saved_rtf <- rtf_path
+      },
+      error = function(e) {
+        message(
+          "Note: RTF export failed for '", file_stem,
+          "'. HTML export still succeeded. Details: ", e$message
+        )
+      }
+    )
+  }
+
+  if (!is.null(out_gt_docx_dir)) {
+    dir.create(out_gt_docx_dir, recursive = TRUE, showWarnings = FALSE)
+    docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
+
+    source_data <- attr(gt_tbl, "docx_source_data", exact = TRUE)
+    if (is.null(source_data) && "_data" %in% names(gt_tbl) && is.data.frame(gt_tbl[["_data"]])) {
+      source_data <- gt_tbl[["_data"]]
+    }
+
+    title_text <- attr(gt_tbl, "docx_title_text", exact = TRUE)
+    if (is.null(title_text) || is.na(title_text) || !nzchar(as.character(title_text))) {
+      title_text <- file_stem
+    }
+
+    subtitle_text <- attr(gt_tbl, "docx_subtitle_text", exact = TRUE)
+    source_note <- attr(gt_tbl, "docx_source_note", exact = TRUE)
+
+    if (!is.null(source_data)) {
+      tryCatch(
+        {
+          if (exists("save_docx_table", mode = "function")) {
+            save_docx_table(
+              source_data,
+              path = docx_path,
+              title_text = title_text,
+              subtitle_text = subtitle_text,
+              source_note = source_note
+            )
+          } else {
+            if (!requireNamespace("flextable", quietly = TRUE) || !requireNamespace("officer", quietly = TRUE)) {
+              stop("Packages 'flextable' and 'officer' are required for DOCX export.")
+            }
+
+            source_data <- as.data.frame(source_data, stringsAsFactors = FALSE)
+            source_data[] <- lapply(source_data, function(x) {
+              if (inherits(x, "POSIXt") || inherits(x, "Date")) return(as.character(x))
+              if (is.factor(x)) return(as.character(x))
+              if (is.list(x)) return(vapply(x, function(z) paste(as.character(z), collapse = "; "), character(1)))
+              x
+            })
+
+            border_main <- officer::fp_border(color = "#666666", width = 1.25)
+
+            ft <- flextable::flextable(source_data) %>%
+              flextable::border_remove() %>%
+              flextable::hline_top(part = "header", border = border_main) %>%
+              flextable::hline_bottom(part = "header", border = border_main) %>%
+              flextable::hline_bottom(part = "body", border = border_main) %>%
+              flextable::bold(part = "header") %>%
+              flextable::font(fontname = "Arial", part = "all") %>%
+              flextable::fontsize(size = 9, part = "all") %>%
+              flextable::align(align = "left", part = "all") %>%
+              flextable::valign(valign = "top", part = "all") %>%
+              flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
+              flextable::set_table_properties(layout = "autofit", width = 1) %>%
+              flextable::autofit()
+
+            header_lines <- c(title_text, subtitle_text)
+            header_lines <- header_lines[!is.na(header_lines) & nzchar(as.character(header_lines))]
+            if (length(header_lines) > 0) {
+              for (header_line in rev(header_lines)) {
+                ft <- ft %>% flextable::add_header_lines(values = header_line)
+              }
+              ft <- ft %>%
+                flextable::bold(i = 1, part = "header") %>%
+                flextable::fontsize(i = 1, size = 10, part = "header")
+            }
+
+            if (!is.null(source_note) && !is.na(source_note) && nzchar(as.character(source_note))) {
+              ft <- ft %>%
+                flextable::add_footer_lines(values = source_note) %>%
+                flextable::italic(part = "footer") %>%
+                flextable::fontsize(size = 8, part = "footer")
+            }
+
+            flextable::save_as_docx(ft, path = docx_path)
+          }
+          saved_docx <- docx_path
+        },
+        error = function(e) {
+          message(
+            "Note: DOCX export failed for '", file_stem,
+            "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
+          )
+        }
+      )
+    } else {
+      message("Note: DOCX export skipped for '", file_stem, "' because no source data were available in the gt object.")
+    }
+  }
+
+  tibble::tibble(
+    object_name = file_stem,
+    html_file = html_path,
+    rtf_file = saved_rtf,
+    docx_file = saved_docx
+  )
+}
+
+
+output_dir <- get_output_dir("05")
 
 out_desc_dir     <- file.path(project_root, "data_output", "descriptives")
 out_tables_dir   <- file.path(out_desc_dir, "tables")
@@ -88,6 +241,7 @@ out_requested_captions <- file.path(out_requested_dir, "captions")
 out_gt_dir             <- file.path(out_desc_dir, "gt_tables")
 out_gt_html_dir        <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir         <- file.path(out_gt_dir, "rtf")
+out_gt_docx_dir        <- file.path(out_gt_dir, "docx")
 out_gt_doc_dir         <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
@@ -95,7 +249,7 @@ purrr::walk(
     out_desc_dir, out_tables_dir, out_figures_dir, out_captions_dir,
     out_extended_dir, out_extended_tables, out_extended_figures, out_extended_captions,
     out_requested_dir, out_requested_tables, out_requested_figures, out_requested_captions,
-    out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir
+    out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_docx_dir, out_gt_doc_dir
   ),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
@@ -174,7 +328,7 @@ pre_followup_summary <- tibble(
 matched_pre_main <- final_analysis_dataset %>%
   distinct(participant_id)
 
-message("Confirmation: Script 06 uses only anonymized datasets from data_final/.")
+message("Confirmation: Script 05 uses only anonymized datasets from data_final/.")
 
 #####################################################################
 ###                    Hilfsfunktionen                            ###
@@ -235,11 +389,21 @@ summarise_raw_dataset <- function(df, cfg, dataset_label) {
 save_table_outputs <- function(df, base_filename, out_dir = out_tables_dir) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
+
+  tryCatch(
+    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
+    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
+  )
 }
 
 save_extended_table_outputs <- function(df, base_filename, out_dir = out_extended_tables) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
+
+  tryCatch(
+    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
+    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
+  )
 }
 
 make_numeric_desc <- function(df, var, var_label, dataset_label) {
@@ -399,12 +563,17 @@ make_gt_table <- function(data, title_text, subtitle_text = NULL) {
       data_row.padding = px(4)
     )
 
-  return(gt_tbl)
+  attach_gt_docx_source(gt_tbl, data, title_text, subtitle_text, NULL)
 }
 
 save_requested_table_outputs <- function(df, base_filename, out_dir = out_requested_tables) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
+
+  tryCatch(
+    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
+    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
+  )
 }
 
 get_variable_label <- function(var_name) {
@@ -1911,7 +2080,7 @@ writexl::write_xlsx(
     target_word_category_check = target_word_category_check,
     unmapped_target_words = unmapped_target_words
   ),
-  path = file.path(out_tables_dir, "06_descriptive_reporting_tables.xlsx")
+  path = file.path(out_tables_dir, "05_descriptive_reporting_tables.xlsx")
 )
 
 ggsave(file.path(out_figures_dir, "Fig1_cleaning_flow.png"), plot_cleaning_flow, width = 8, height = 5, dpi = 300)
@@ -1953,7 +2122,7 @@ writexl::write_xlsx(
     extended_caption_guide = extended_caption_guide,
     survey_duration_summary_table = survey_duration_summary_table  # CHANGED
   ),
-  path = file.path(out_extended_dir, "06b_extended_descriptives.xlsx")
+  path = file.path(out_extended_dir, "05b_extended_descriptives.xlsx")
 )
 
 save_requested_table_outputs(requested_pre_variable_summary_table, "01_requested_pre_variable_summary_table")
@@ -2530,18 +2699,19 @@ gt_output_list <- list(
 gt_manifest <- purrr::imap_dfr(
   gt_output_list,
   function(gt_tbl, object_name) {
-    save_gt_table(
+    save_gt_table_docx_safe(
       gt_tbl = gt_tbl,
       file_stem = object_name,
       out_gt_html_dir = out_gt_html_dir,
-      out_gt_rtf_dir = out_gt_rtf_dir
+      out_gt_rtf_dir = out_gt_rtf_dir,
+      out_gt_docx_dir = out_gt_docx_dir
     )
   }
 )
 
 save_table_outputs(
   gt_manifest,
-  base_filename = "06_reporting_gt_manifest",
+  base_filename = "05_reporting_gt_manifest",
   out_dir = out_gt_doc_dir
 )
 gt_index_path <- file.path(out_gt_dir, "00_gt_index.html")   # CHANGED
@@ -2571,19 +2741,21 @@ gt_console_summary <- c(
   "",
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
+  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", gt_index_path)                    # CHANGED
 )
 
 writeLines(
   gt_console_summary,
-  con = file.path(out_gt_doc_dir, "06_reporting_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "05_reporting_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
+message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", gt_index_path)                     # CHANGED
-message("Manifest: ", file.path(out_gt_doc_dir, "06_reporting_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
 
 # =========================================================
 # CHANGED: Pfad am Ende explizit zurückgeben
@@ -2597,30 +2769,32 @@ gt_console_summary <- c(
   "",
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
+  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
 )
 
 writeLines(
   gt_console_summary,
-  con = file.path(out_gt_doc_dir, "06_reporting_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "05_reporting_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the reporting workflow were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
+message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "06_reporting_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "05_reporting_gt_manifest.csv"))
 
 
 # =========================================================
-# 13) Lokaler Export-Index für Skript 06                  ===
+# 13) Lokaler Export-Index für Skript 05                  ===
 # =========================================================
 
-local_index_path_06 <- file.path(out_desc_dir, "00_export_index.html")
-local_manifest_csv_06 <- file.path(out_captions_dir, "00_export_manifest.csv")
-local_manifest_xlsx_06 <- file.path(out_captions_dir, "00_export_manifest.xlsx")
+local_index_path_05 <- file.path(out_desc_dir, "00_export_index.html")
+local_manifest_csv_05 <- file.path(out_captions_dir, "00_export_manifest.csv")
+local_manifest_xlsx_05 <- file.path(out_captions_dir, "00_export_manifest.xlsx")
 
-local_export_files_06 <- list.files(
+local_export_files_05 <- list.files(
   out_desc_dir,
   recursive = TRUE,
   full.names = TRUE,
@@ -2628,43 +2802,43 @@ local_export_files_06 <- list.files(
   no.. = TRUE
 )
 
-local_export_files_06 <- local_export_files_06[
-  file.exists(local_export_files_06) & !dir.exists(local_export_files_06)
+local_export_files_05 <- local_export_files_05[
+  file.exists(local_export_files_05) & !dir.exists(local_export_files_05)
 ]
 
-local_export_files_06 <- setdiff(
-  local_export_files_06,
-  c(local_index_path_06, local_manifest_csv_06, local_manifest_xlsx_06)
+local_export_files_05 <- setdiff(
+  local_export_files_05,
+  c(local_index_path_05, local_manifest_csv_05, local_manifest_xlsx_05)
 )
 
-export_manifest_06 <- tibble(
-  label = basename(local_export_files_06),
-  path = local_export_files_06,
-  notes = paste0("Exportdatei aus Skript 06 (", toupper(tools::file_ext(local_export_files_06)), ")")
+export_manifest_05 <- tibble(
+  label = basename(local_export_files_05),
+  path = local_export_files_05,
+  notes = paste0("Exportdatei aus Skript 05 (", toupper(tools::file_ext(local_export_files_05)), ")")
 ) %>%
   bind_rows(
     tibble(
       label = c("00_export_manifest.csv", "00_export_manifest.xlsx"),
-      path = c(local_manifest_csv_06, local_manifest_xlsx_06),
+      path = c(local_manifest_csv_05, local_manifest_xlsx_05),
       notes = c("Lokales Export-Manifest als CSV", "Lokales Export-Manifest als XLSX")
     )
   ) %>%
   arrange(path)
 
 save_table_outputs(
-  export_manifest_06,
+  export_manifest_05,
   base_filename = "00_export_manifest",
   out_dir = out_captions_dir
 )
 
 build_general_export_index(
-  manifest = export_manifest_06,
-  output_path = local_index_path_06,
+  manifest = export_manifest_05,
+  output_path = local_index_path_05,
   title_text = "Deskriptive Statistik & Reporting: Export index",
-  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken, GT-Tabellen und Dokumentationsdateien des Skripts 06."
+  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken, GT-Tabellen und Dokumentationsdateien des Skripts 05."
 )
 
-message("Local export index: ", local_index_path_06)
+message("Local export index: ", local_index_path_05)
 
 gt_preview_removal_summary
 gt_raw_dataset_overview

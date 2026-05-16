@@ -169,6 +169,11 @@ apply_filter_condition <- function(df, filter_expr = NULL) {
 save_table_outputs <- function(df, base_filename, out_dir = out_tables_dir) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
+
+  tryCatch(
+    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
+    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
+  )
 }
 
 build_empty_result <- function(var_name, question_focus, question_text, analysis_type, filter_note, denominator_note) {
@@ -1085,7 +1090,7 @@ purrr::iwalk(output_list, ~ save_table_outputs(.x, .y))
 
 writexl::write_xlsx(
   output_list,
-  path = file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx")
+  path = file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx")
 )
 
 # =========================================================
@@ -1105,7 +1110,7 @@ console_summary <- c(
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt")
+  con = file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt")
 )
 
 # =========================================================
@@ -1132,8 +1137,8 @@ export_manifest <- purrr::imap_dfr(
         "Console summary"
       ),
       path = c(
-        file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx"),
-        file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt")
+        file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx"),
+        file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt")
       ),
       notes = c(
         "Kombinierte Excel-Arbeitsmappe aller Outputs",
@@ -1148,13 +1153,13 @@ build_general_export_index(
   manifest = export_manifest,
   output_path = file.path(out_doc_dir, "00_export_index.html"),
   title_text = "Pre-Survey descriptives (pre-merge): Export index",
-  intro_text = "Dieser Unterindex bündelt die Tabellen- und Dokumentationsdateien des Skripts 07."
+  intro_text = "Dieser Unterindex bündelt die Tabellen- und Dokumentationsdateien des Skripts 06."
 )
 
 message("Confirmation: All requested pre-survey descriptive tables were exported successfully.")
 message("Individual CSV/XLSX tables: ", out_tables_dir)
-message("Combined workbook: ", file.path(out_base_dir, "07_pre_survey_premerge_requested_descriptives.xlsx"))
-message("Console summary: ", file.path(out_doc_dir, "07_pre_survey_premerge_requested_descriptives_console_summary.txt"))
+message("Combined workbook: ", file.path(out_base_dir, "06_pre_survey_premerge_requested_descriptives.xlsx"))
+message("Console summary: ", file.path(out_doc_dir, "06_pre_survey_premerge_requested_descriptives_console_summary.txt"))
 
 #####################################################################
 ### End of workflow                                               ###

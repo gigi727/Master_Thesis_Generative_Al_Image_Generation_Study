@@ -17,7 +17,7 @@
 # pre-survey descriptives (cleaned pre-survey data before merging).
 #
 # It is designed as a presentation layer on top of:
-#   07_pre_survey_premerge_requested_descriptives_fixed_unified.R
+#   06_pre_survey_premerge_requested_descriptives_fixed_unified.R
 #
 # Workflow:
 # - source the base descriptives script when needed
@@ -64,7 +64,7 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
-base_script_path <- file.path(project_root, "scripts", "07_pre_survey_premerge_requested_descriptives_fixed_unified.R")
+base_script_path <- file.path(project_root, "scripts", "06_pre_survey_premerge_requested_descriptives_fixed_unified.R")
 
 
 if (is.na(base_script_path)) {
@@ -81,10 +81,11 @@ out_base_dir     <- file.path(project_root, "data_output", "descriptives", "pre_
 out_gt_dir       <- file.path(out_base_dir, "gt_tables")
 out_gt_html_dir  <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir   <- file.path(out_gt_dir, "rtf")
+out_gt_docx_dir  <- file.path(out_gt_dir, "docx")
 out_gt_doc_dir   <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
-  c(out_base_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir),
+  c(out_base_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_docx_dir, out_gt_doc_dir),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
 
@@ -409,13 +410,18 @@ make_gt_table_requested <- function(df, object_name) {
     format_gt_columns(display_df) %>%
     apply_item_grouping(display_df)
 
-  gt_tbl
+  docx_display_df <- display_df %>%
+    dplyr::select(-dplyr::any_of(c("Item")))
+
+  attach_gt_docx_source(gt_tbl, docx_display_df, title_text, subtitle_text, source_note)
 }
 
 save_gt_table <- function(gt_tbl, file_stem) {
   html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
   rtf_path  <- file.path(out_gt_rtf_dir,  paste0(file_stem, ".rtf"))
+  docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
   saved_rtf <- NA_character_
+  saved_docx <- NA_character_
 
   gt::gtsave(gt_tbl, filename = html_path)
 
@@ -429,10 +435,31 @@ save_gt_table <- function(gt_tbl, file_stem) {
     }
   )
 
+  source_data <- extract_gt_docx_source_data(gt_tbl)
+
+  if (!is.null(source_data)) {
+    tryCatch(
+      {
+        save_docx_table(
+          source_data,
+          path = docx_path,
+          title_text = attr(gt_tbl, "docx_title_text", exact = TRUE) %||% file_stem,
+          subtitle_text = attr(gt_tbl, "docx_subtitle_text", exact = TRUE),
+          source_note = attr(gt_tbl, "docx_source_note", exact = TRUE)
+        )
+        saved_docx <- docx_path
+      },
+      error = function(e) {
+        message("Note: DOCX export failed for '", file_stem, "'. HTML/RTF exports still succeeded where supported. Details: ", e$message)
+      }
+    )
+  }
+
   tibble(
     object_name = file_stem,
     html_file = html_path,
-    rtf_file = saved_rtf
+    rtf_file = saved_rtf,
+    docx_file = saved_docx
   )
 }
 
@@ -467,7 +494,7 @@ gt_manifest <- purrr::imap_dfr(
 
 readr::write_csv(
   gt_manifest,
-  file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_manifest.csv")
+  file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_manifest.csv")
 )
 
 # =========================================================
@@ -540,19 +567,21 @@ console_summary <- c(
   paste0("Base descriptives script used: ", base_script_path),
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
+  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the requested pre-survey descriptives were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
+message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "08_pre_survey_premerge_requested_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "07_pre_survey_premerge_requested_gt_manifest.csv"))
 
 #####################################################################
 ### End of workflow                                               ###

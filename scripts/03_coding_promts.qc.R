@@ -59,6 +59,159 @@ if (length(helper_script_path) == 0 || is.na(helper_script_path)) {
 
 source(helper_script_path, local = .GlobalEnv)
 
+#####################################################################
+### DOCX-SAFE GT EXPORT COMPATIBILITY (ADDED)                     ###
+#####################################################################
+
+# This wrapper keeps the existing HTML/RTF export logic intact and adds
+# DOCX output without changing any analysis or table-construction method.
+# It also remains compatible with older versions of 00_project_helpers_unified.R
+# where save_gt_table() did not yet accept out_gt_docx_dir.
+save_gt_table_docx_safe <- function(gt_tbl,
+                                    file_stem,
+                                    out_gt_html_dir,
+                                    out_gt_rtf_dir = NULL,
+                                    out_gt_docx_dir = NULL) {
+  if (
+    exists("save_gt_table", mode = "function") &&
+      "out_gt_docx_dir" %in% names(formals(save_gt_table))
+  ) {
+    return(
+      save_gt_table(
+        gt_tbl = gt_tbl,
+        file_stem = file_stem,
+        out_gt_html_dir = out_gt_html_dir,
+        out_gt_rtf_dir = out_gt_rtf_dir,
+        out_gt_docx_dir = out_gt_docx_dir
+      )
+    )
+  }
+
+  html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
+  saved_rtf <- NA_character_
+  saved_docx <- NA_character_
+
+  dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
+  gt::gtsave(gt_tbl, filename = html_path)
+
+  if (!is.null(out_gt_rtf_dir)) {
+    dir.create(out_gt_rtf_dir, recursive = TRUE, showWarnings = FALSE)
+    rtf_path <- file.path(out_gt_rtf_dir, paste0(file_stem, ".rtf"))
+
+    tryCatch(
+      {
+        gt::gtsave(gt_tbl, filename = rtf_path)
+        saved_rtf <- rtf_path
+      },
+      error = function(e) {
+        message(
+          "Note: RTF export failed for '", file_stem,
+          "'. HTML export still succeeded. Details: ", e$message
+        )
+      }
+    )
+  }
+
+  if (!is.null(out_gt_docx_dir)) {
+    dir.create(out_gt_docx_dir, recursive = TRUE, showWarnings = FALSE)
+    docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
+
+    source_data <- attr(gt_tbl, "docx_source_data", exact = TRUE)
+    if (is.null(source_data) && "_data" %in% names(gt_tbl) && is.data.frame(gt_tbl[["_data"]])) {
+      source_data <- gt_tbl[["_data"]]
+    }
+
+    title_text <- attr(gt_tbl, "docx_title_text", exact = TRUE)
+    if (is.null(title_text) || is.na(title_text) || !nzchar(as.character(title_text))) {
+      title_text <- file_stem
+    }
+
+    subtitle_text <- attr(gt_tbl, "docx_subtitle_text", exact = TRUE)
+    source_note <- attr(gt_tbl, "docx_source_note", exact = TRUE)
+
+    if (!is.null(source_data)) {
+      tryCatch(
+        {
+          if (exists("save_docx_table", mode = "function")) {
+            save_docx_table(
+              source_data,
+              path = docx_path,
+              title_text = title_text,
+              subtitle_text = subtitle_text,
+              source_note = source_note
+            )
+          } else {
+            if (!requireNamespace("flextable", quietly = TRUE) || !requireNamespace("officer", quietly = TRUE)) {
+              stop("Packages 'flextable' and 'officer' are required for DOCX export.")
+            }
+
+            source_data <- as.data.frame(source_data, stringsAsFactors = FALSE)
+            source_data[] <- lapply(source_data, function(x) {
+              if (inherits(x, "POSIXt") || inherits(x, "Date")) return(as.character(x))
+              if (is.factor(x)) return(as.character(x))
+              if (is.list(x)) return(vapply(x, function(z) paste(as.character(z), collapse = "; "), character(1)))
+              x
+            })
+
+            border_main <- officer::fp_border(color = "#666666", width = 1.25)
+
+            ft <- flextable::flextable(source_data) %>%
+              flextable::border_remove() %>%
+              flextable::hline_top(part = "header", border = border_main) %>%
+              flextable::hline_bottom(part = "header", border = border_main) %>%
+              flextable::hline_bottom(part = "body", border = border_main) %>%
+              flextable::bold(part = "header") %>%
+              flextable::font(fontname = "Arial", part = "all") %>%
+              flextable::fontsize(size = 9, part = "all") %>%
+              flextable::align(align = "left", part = "all") %>%
+              flextable::valign(valign = "top", part = "all") %>%
+              flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
+              flextable::set_table_properties(layout = "autofit", width = 1) %>%
+              flextable::autofit()
+
+            header_lines <- c(title_text, subtitle_text)
+            header_lines <- header_lines[!is.na(header_lines) & nzchar(as.character(header_lines))]
+            if (length(header_lines) > 0) {
+              for (header_line in rev(header_lines)) {
+                ft <- ft %>% flextable::add_header_lines(values = header_line)
+              }
+              ft <- ft %>%
+                flextable::bold(i = 1, part = "header") %>%
+                flextable::fontsize(i = 1, size = 10, part = "header")
+            }
+
+            if (!is.null(source_note) && !is.na(source_note) && nzchar(as.character(source_note))) {
+              ft <- ft %>%
+                flextable::add_footer_lines(values = source_note) %>%
+                flextable::italic(part = "footer") %>%
+                flextable::fontsize(size = 8, part = "footer")
+            }
+
+            flextable::save_as_docx(ft, path = docx_path)
+          }
+          saved_docx <- docx_path
+        },
+        error = function(e) {
+          message(
+            "Note: DOCX export failed for '", file_stem,
+            "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
+          )
+        }
+      )
+    } else {
+      message("Note: DOCX export skipped for '", file_stem, "' because no source data were available in the gt object.")
+    }
+  }
+
+  tibble::tibble(
+    object_name = file_stem,
+    html_file = html_path,
+    rtf_file = saved_rtf,
+    docx_file = saved_docx
+  )
+}
+
+
 output_dir <- get_output_dir("03")
 
 scripts_dir  <- file.path(project_root, "scripts")
@@ -71,6 +224,7 @@ out_document_dir <- file.path(out_prompt_dir, "documentation")
 out_gt_dir      <- file.path(out_prompt_dir, "gt_tables")
 out_gt_html_dir <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir  <- file.path(out_gt_dir, "rtf")
+out_gt_docx_dir <- file.path(out_gt_dir, "docx")
 out_gt_doc_dir  <- file.path(out_gt_dir, "documentation")
 
 ensure_directories(c(
@@ -79,6 +233,7 @@ ensure_directories(c(
   out_gt_dir,
   out_gt_html_dir,
   out_gt_rtf_dir,
+  out_gt_docx_dir,
   out_gt_doc_dir
 ))
 
@@ -1176,11 +1331,12 @@ gt_output_list <- list(
 gt_manifest <- purrr::imap_dfr(
   gt_output_list,
   function(gt_tbl, object_name) {
-    save_gt_table(
+    save_gt_table_docx_safe(
       gt_tbl = gt_tbl,
       file_stem = object_name,
       out_gt_html_dir = out_gt_html_dir,
-      out_gt_rtf_dir = out_gt_rtf_dir
+      out_gt_rtf_dir = out_gt_rtf_dir,
+      out_gt_docx_dir = out_gt_docx_dir
     )
   }
 )

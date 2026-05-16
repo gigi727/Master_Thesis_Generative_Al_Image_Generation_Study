@@ -9,7 +9,7 @@
 # Alle Bezüge zum gelöschten Hypothesenanalyse-Skript
 # `04_hypothesenanalyse_hauptteil_unified_v2.R` wurden entfernt.
 # Das Skript basiert nun ausschließlich auf den Reporting-/
-# Deskriptiv-Outputs aus Skript 06.
+# Deskriptiv-Outputs aus Skript 05.
 
 #####################################################################
 ### Main study reporting results as GT tables                      ###
@@ -94,10 +94,11 @@ out_base_dir    <- file.path(project_root, "data_output", "main_study_results")
 out_gt_dir      <- file.path(out_base_dir, "gt_tables")
 out_gt_html_dir <- file.path(out_gt_dir, "html")
 out_gt_rtf_dir  <- file.path(out_gt_dir, "rtf")
+out_gt_docx_dir <- file.path(out_gt_dir, "docx")
 out_gt_doc_dir  <- file.path(out_gt_dir, "documentation")
 
 purrr::walk(
-  c(out_base_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_doc_dir),
+  c(out_base_dir, out_gt_dir, out_gt_html_dir, out_gt_rtf_dir, out_gt_docx_dir, out_gt_doc_dir),
   ~ dir.create(.x, recursive = TRUE, showWarnings = FALSE)
 )
 
@@ -501,15 +502,22 @@ make_gt_table_main <- function(df, object_name) {
       gt::tab_source_note(source_note)
   }
 
-  gt_tbl %>%
+  gt_tbl <- gt_tbl %>%
     format_gt_columns(display_df) %>%
     apply_row_grouping(display_df)
+
+  docx_display_df <- display_df %>%
+    dplyr::select(-dplyr::any_of(c("Item", "Group label", "Iteration")))
+
+  attach_gt_docx_source(gt_tbl, docx_display_df, title_text, subtitle_text, source_note)
 }
 
 save_gt_table <- function(gt_tbl, file_stem) {
   html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
   rtf_path  <- file.path(out_gt_rtf_dir,  paste0(file_stem, ".rtf"))
+  docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
   saved_rtf <- NA_character_
+  saved_docx <- NA_character_
 
   gt::gtsave(gt_tbl, filename = html_path)
 
@@ -528,10 +536,36 @@ save_gt_table <- function(gt_tbl, file_stem) {
     }
   )
 
+  source_data <- extract_gt_docx_source_data(gt_tbl)
+
+  if (!is.null(source_data)) {
+    tryCatch(
+      {
+        save_docx_table(
+          source_data,
+          path = docx_path,
+          title_text = attr(gt_tbl, "docx_title_text", exact = TRUE) %||% file_stem,
+          subtitle_text = attr(gt_tbl, "docx_subtitle_text", exact = TRUE),
+          source_note = attr(gt_tbl, "docx_source_note", exact = TRUE)
+        )
+        saved_docx <- docx_path
+      },
+      error = function(e) {
+        message(
+          "Note: DOCX export failed for '",
+          file_stem,
+          "'. HTML/RTF exports still succeeded where supported. Details: ",
+          e$message
+        )
+      }
+    )
+  }
+
   tibble(
     object_name = file_stem,
     html_file = html_path,
-    rtf_file = saved_rtf
+    rtf_file = saved_rtf,
+    docx_file = saved_docx
   )
 }
 
@@ -566,7 +600,7 @@ gt_manifest <- purrr::imap_dfr(
 
 readr::write_csv(
   gt_manifest,
-  file.path(out_gt_doc_dir, "09_main_study_results_gt_manifest.csv")
+  file.path(out_gt_doc_dir, "08_main_study_results_gt_manifest.csv")
 )
 
 # =========================================================
@@ -639,19 +673,21 @@ console_summary <- c(
   paste0("Reporting script used: ", reporting_script_path),
   paste0("HTML directory: ", out_gt_html_dir),
   paste0("RTF directory: ", out_gt_rtf_dir),
+  paste0("DOCX directory: ", out_gt_docx_dir),
   paste0("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_gt_doc_dir, "09_main_study_results_gt_console_summary.txt")
+  con = file.path(out_gt_doc_dir, "08_main_study_results_gt_console_summary.txt")
 )
 
 message("Confirmation: GT tables for the main study reporting results were exported successfully.")
 message("HTML tables: ", out_gt_html_dir)
 message("RTF tables (where supported): ", out_gt_rtf_dir)
+message("DOCX tables: ", out_gt_docx_dir)
 message("Index file: ", file.path(out_gt_dir, "00_gt_index.html"))
-message("Manifest: ", file.path(out_gt_doc_dir, "09_main_study_results_gt_manifest.csv"))
+message("Manifest: ", file.path(out_gt_doc_dir, "08_main_study_results_gt_manifest.csv"))
 
 #####################################################################
 ### End of workflow                                               ###

@@ -24,7 +24,7 @@
 # - Main_Survey_Q52 nach VIVIQ-Level
 #
 # Die Darstellung orientiert sich an den vorhandenen ReqFig-Plots aus
-# 06_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert.R,
+# 05_deskriptive_statistik_und_reporting_final_konsolidiert_erweitert.R,
 # ergänzt diese jedoch um eine Stratifizierung nach VIVIQ-Level.
 #
 # Kategorisierung in diesem Skript:
@@ -92,7 +92,7 @@ purrr::walk(
 # =========================================================
 
 # Dieses Skript verwendet direkt den finalen gematchten anonymisierten
-# Datensatz aus data_final/. Es lädt nicht mehr Skript 06, damit keine
+# Datensatz aus data_final/. Es lädt nicht mehr Skript 05, damit keine
 # Rohdaten- oder Cleaning-Objekte aus 01-03 benötigt werden.
 
 loaded_datasets <- load_anonymized_analysis_datasets(
@@ -107,7 +107,7 @@ main_feature_lookup <- loaded_datasets$main_feature_lookup
 
 message("Confirmation: This script uses data_final/final_analysis_dataset_anonymized.rds as its analysis base.")
 
-# Fallbacks, damit dieses Skript ohne Skript 06 lauffähig bleibt.
+# Fallbacks, damit dieses Skript ohne Skript 05 lauffähig bleibt.
 if (!exists("theme_result", envir = .GlobalEnv, inherits = FALSE)) {
   theme_result <- function() {
     ggplot2::theme_minimal(base_size = 12) +
@@ -225,6 +225,11 @@ get_question_text <- function(lookup_df, var_name) {
 save_table_outputs <- function(df, base_filename, out_dir = out_tables_dir) {
   readr::write_csv(df, file.path(out_dir, paste0(base_filename, ".csv")))
   writexl::write_xlsx(df, path = file.path(out_dir, paste0(base_filename, ".xlsx")))
+
+  tryCatch(
+    save_docx_table(df, path = file.path(out_dir, paste0(base_filename, ".docx")), title_text = base_filename),
+    error = function(e) message("Note: DOCX export failed for '", base_filename, "'. Details: ", e$message)
+  )
 }
 
 make_viviq_level <- function(x) {
@@ -608,7 +613,7 @@ writexl::write_xlsx(
     viviq_block_distribution = viviq_block_distribution,
     viviq_q52_distribution = viviq_q52_distribution
   ),
-  path = file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx")
+  path = file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx")
 )
 
 # =========================================================
@@ -672,12 +677,12 @@ console_summary <- c(
   ),
   "",
   "Exported workbook:",
-  file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx")
+  file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx")
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt")
+  con = file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt")
 )
 
 # =========================================================
@@ -718,12 +723,12 @@ export_manifest <- tibble(
     file.path(out_tables_dir, "05_viviq_block_distribution.xlsx"),
     file.path(out_tables_dir, "06_viviq_q52_distribution.csv"),
     file.path(out_tables_dir, "06_viviq_q52_distribution.xlsx"),
-    file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx"),
+    file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx"),
     file.path(out_figures_dir, "VIVIQFig1_longitudinal_group_1_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig2_longitudinal_group_2_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig3_longitudinal_block_by_level.png"),
     file.path(out_figures_dir, "VIVIQFig4_q52_by_level.png"),
-    file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt")
+    file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt")
   ),
   notes = c(
     "Tabelle als CSV",
@@ -753,14 +758,14 @@ build_general_export_index(
   manifest = export_manifest,
   output_path = file.path(out_doc_dir, "00_export_index.html"),
   title_text = "VIVIQ level effect plots: Export index",
-  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken und Dokumentation des Skripts 10."
+  intro_text = "Dieser Unterindex bündelt Tabellen, Grafiken und Dokumentation des Skripts 09."
 )
 
 message("Confirmation: VIVIQ-level effect plots for the main study were exported successfully.")
 message("Figures: ", out_figures_dir)
 message("Tables: ", out_tables_dir)
-message("Workbook: ", file.path(out_base_dir, "10_viviq_level_effect_tables.xlsx"))
-message("Console summary: ", file.path(out_doc_dir, "10_viviq_level_effect_console_summary.txt"))
+message("Workbook: ", file.path(out_base_dir, "09_viviq_level_effect_tables.xlsx"))
+message("Console summary: ", file.path(out_doc_dir, "09_viviq_level_effect_console_summary.txt"))
 
 #####################################################################
 ### End of workflow                                               ###

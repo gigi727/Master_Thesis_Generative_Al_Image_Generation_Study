@@ -12,6 +12,7 @@
 # - Plot-Themes
 # - einfache GT-Basisstile
 # - GT-Datei-Exporte
+# - DOCX-Tabellenexports für Word-kompatible Tabellen
 # - einfache HTML-Indizes für Exportordner
 #
 # WICHTIG:
@@ -29,6 +30,8 @@ library(tidyverse)
 library(readr)
 library(writexl)
 library(gt)
+library(flextable)
+library(officer)
 
 # =========================================================
 # 1) Zentrale Defaults                                   ===
@@ -115,6 +118,10 @@ collapse_unique <- function(x) {
   if (length(x) == 0) return(NA_character_)
   if (length(x) == 1) return(x)
   paste(x, collapse = "; ")
+}
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
 }
 
 # =========================================================
@@ -205,20 +212,154 @@ write_csv_project <- function(df, path, mode = project_csv_export_mode, na = "")
   }
 }
 
+# =========================================================
+# 5a) Einheitliche DOCX-Tabellenexports                    ===
+# =========================================================
+
+coerce_docx_table_data <- function(df) {
+  df <- as.data.frame(df, stringsAsFactors = FALSE)
+
+  df[] <- lapply(df, function(x) {
+    if (inherits(x, c("Date", "POSIXct", "POSIXlt"))) {
+      return(as.character(x))
+    }
+
+    if (is.factor(x)) {
+      return(as.character(x))
+    }
+
+    if (is.list(x)) {
+      return(vapply(x, function(z) paste(as.character(z), collapse = "; "), character(1)))
+    }
+
+    x
+  })
+
+  df
+}
+
+make_flextable_academic <- function(df,
+                                    title_text = NULL,
+                                    subtitle_text = NULL,
+                                    source_note = NULL,
+                                    fontname = "Arial") {
+  df <- coerce_docx_table_data(df)
+
+  border_main <- officer::fp_border(color = "#666666", width = 1.25)
+
+  ft <- flextable::flextable(df) %>%
+    flextable::border_remove() %>%
+    flextable::hline_top(part = "header", border = border_main) %>%
+    flextable::hline_bottom(part = "header", border = border_main) %>%
+    flextable::hline_bottom(part = "body", border = border_main) %>%
+    flextable::bold(part = "header") %>%
+    flextable::font(fontname = fontname, part = "all") %>%
+    flextable::fontsize(size = 9, part = "all") %>%
+    flextable::align(align = "left", part = "all") %>%
+    flextable::valign(valign = "top", part = "all") %>%
+    flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
+    flextable::set_table_properties(layout = "autofit", width = 1) %>%
+    flextable::autofit()
+
+  header_lines <- c(title_text, subtitle_text)
+  header_lines <- header_lines[!is.na(header_lines) & nzchar(header_lines)]
+
+  if (length(header_lines) > 0) {
+    for (header_line in rev(header_lines)) {
+      ft <- ft %>% flextable::add_header_lines(values = header_line)
+    }
+    ft <- ft %>%
+      flextable::bold(i = 1, part = "header") %>%
+      flextable::fontsize(i = 1, size = 10, part = "header")
+  }
+
+  if (!is.null(source_note) && !is.na(source_note) && nzchar(source_note)) {
+    ft <- ft %>%
+      flextable::add_footer_lines(values = source_note) %>%
+      flextable::italic(part = "footer") %>%
+      flextable::fontsize(size = 8, part = "footer")
+  }
+
+  ft
+}
+
+save_docx_table <- function(df,
+                            path,
+                            title_text = NULL,
+                            subtitle_text = NULL,
+                            source_note = NULL) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  ft <- make_flextable_academic(
+    df = df,
+    title_text = title_text,
+    subtitle_text = subtitle_text,
+    source_note = source_note
+  )
+
+  flextable::save_as_docx(ft, path = path)
+  invisible(path)
+}
+
+attach_gt_docx_source <- function(gt_tbl,
+                                  data,
+                                  title_text = NULL,
+                                  subtitle_text = NULL,
+                                  source_note = NULL) {
+  attr(gt_tbl, "docx_source_data") <- data
+  attr(gt_tbl, "docx_title_text") <- title_text
+  attr(gt_tbl, "docx_subtitle_text") <- subtitle_text
+  attr(gt_tbl, "docx_source_note") <- source_note
+  gt_tbl
+}
+
+extract_gt_docx_source_data <- function(gt_tbl) {
+  source_data <- attr(gt_tbl, "docx_source_data", exact = TRUE)
+
+  if (!is.null(source_data)) {
+    return(source_data)
+  }
+
+  if ("_data" %in% names(gt_tbl) && is.data.frame(gt_tbl[["_data"]])) {
+    return(gt_tbl[["_data"]])
+  }
+
+  NULL
+}
+
 save_table_outputs <- function(df,
                                base_filename,
                                out_dir,
-                               csv_mode = project_csv_export_mode) {
+                               csv_mode = project_csv_export_mode,
+                               docx = TRUE) {
   csv_path  <- file.path(out_dir, paste0(base_filename, ".csv"))
   xlsx_path <- file.path(out_dir, paste0(base_filename, ".xlsx"))
+  docx_path <- file.path(out_dir, paste0(base_filename, ".docx"))
+  saved_docx <- NA_character_
 
   write_csv_project(df, csv_path, mode = csv_mode)
   writexl::write_xlsx(df, path = xlsx_path)
 
+  if (isTRUE(docx)) {
+    tryCatch(
+      {
+        save_docx_table(df, path = docx_path, title_text = base_filename)
+        saved_docx <- docx_path
+      },
+      error = function(e) {
+        message(
+          "Note: DOCX export failed for '", base_filename,
+          "'. CSV/XLSX exports still succeeded. Details: ", e$message
+        )
+      }
+    )
+  }
+
   invisible(
     list(
       csv_file = csv_path,
-      xlsx_file = xlsx_path
+      xlsx_file = xlsx_path,
+      docx_file = saved_docx
     )
   )
 }
@@ -267,12 +408,17 @@ make_gt_table_standard <- function(df,
       gt::tab_source_note(source_note)
   }
 
-  gt_tbl
+  attach_gt_docx_source(gt_tbl, df, title_text, subtitle_text, source_note)
 }
 
-save_gt_table <- function(gt_tbl, file_stem, out_gt_html_dir, out_gt_rtf_dir = NULL) {
+save_gt_table <- function(gt_tbl,
+                          file_stem,
+                          out_gt_html_dir,
+                          out_gt_rtf_dir = NULL,
+                          out_gt_docx_dir = NULL) {
   html_path <- file.path(out_gt_html_dir, paste0(file_stem, ".html"))
   saved_rtf <- NA_character_
+  saved_docx <- NA_character_
 
   dir.create(out_gt_html_dir, recursive = TRUE, showWarnings = FALSE)
   gt::gtsave(gt_tbl, filename = html_path)
@@ -295,10 +441,41 @@ save_gt_table <- function(gt_tbl, file_stem, out_gt_html_dir, out_gt_rtf_dir = N
     )
   }
 
+  if (!is.null(out_gt_docx_dir)) {
+    dir.create(out_gt_docx_dir, recursive = TRUE, showWarnings = FALSE)
+    docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
+
+    source_data <- extract_gt_docx_source_data(gt_tbl)
+
+    if (!is.null(source_data)) {
+      tryCatch(
+        {
+          save_docx_table(
+            source_data,
+            path = docx_path,
+            title_text = attr(gt_tbl, "docx_title_text", exact = TRUE) %||% file_stem,
+            subtitle_text = attr(gt_tbl, "docx_subtitle_text", exact = TRUE),
+            source_note = attr(gt_tbl, "docx_source_note", exact = TRUE)
+          )
+          saved_docx <- docx_path
+        },
+        error = function(e) {
+          message(
+            "Note: DOCX export failed for '", file_stem,
+            "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
+          )
+        }
+      )
+    } else {
+      message("Note: DOCX export skipped for '", file_stem, "' because no source data were attached to the gt object.")
+    }
+  }
+
   tibble::tibble(
     object_name = file_stem,
     html_file = html_path,
-    rtf_file = saved_rtf
+    rtf_file = saved_rtf,
+    docx_file = saved_docx
   )
 }
 
@@ -319,19 +496,20 @@ build_simple_html_index <- function(manifest,
                                     output_path,
                                     title_text,
                                     intro_text,
-                                    column_order = c("object_name", "variable_name", "question_focus", "analysis_type", "html_file", "rtf_file"),
+                                    column_order = c("object_name", "variable_name", "question_focus", "analysis_type", "html_file", "rtf_file", "docx_file"),
                                     display_labels = c(
                                       object_name = "Object",
                                       variable_name = "Variable",
                                       question_focus = "Question focus",
                                       analysis_type = "Analysis type",
                                       html_file = "HTML",
-                                      rtf_file = "RTF"
+                                      rtf_file = "RTF",
+                                      docx_file = "DOCX"
                                     )) {
   manifest <- manifest %>%
     dplyr::select(dplyr::any_of(column_order))
 
-  make_file_cell <- function(html_file, rtf_file) {
+  make_file_cell <- function(html_file = NA_character_, rtf_file = NA_character_, docx_file = NA_character_) {
     html_part <- if (!is.na(html_file) && nzchar(html_file)) {
       paste0('<a href="html/', basename(html_file), '">HTML</a>')
     } else {
@@ -344,13 +522,30 @@ build_simple_html_index <- function(manifest,
       ""
     }
 
-    paste(c(html_part, rtf_part), collapse = ifelse(nzchar(html_part) & nzchar(rtf_part), " | ", ""))
+    docx_part <- if (!is.na(docx_file) && nzchar(docx_file)) {
+      paste0('<a href="docx/', basename(docx_file), '">DOCX</a>')
+    } else {
+      ""
+    }
+
+    parts <- c(html_part, rtf_part, docx_part)
+    parts <- parts[nzchar(parts)]
+    paste(parts, collapse = " | ")
   }
 
   header_cols <- names(manifest)
 
-  if (all(c("html_file", "rtf_file") %in% names(manifest))) {
-    file_cell <- purrr::map2_chr(manifest$html_file, manifest$rtf_file, make_file_cell)
+  if (all(c("html_file", "rtf_file", "docx_file") %in% names(manifest))) {
+    file_cell <- purrr::pmap_chr(
+      list(manifest$html_file, manifest$rtf_file, manifest$docx_file),
+      ~ make_file_cell(..1, ..2, ..3)
+    )
+    manifest <- manifest %>%
+      dplyr::mutate(Files = file_cell) %>%
+      dplyr::select(-html_file, -rtf_file, -docx_file)
+    header_cols <- names(manifest)
+  } else if (all(c("html_file", "rtf_file") %in% names(manifest))) {
+    file_cell <- purrr::map2_chr(manifest$html_file, manifest$rtf_file, ~ make_file_cell(.x, .y, NA_character_))
     manifest <- manifest %>%
       dplyr::mutate(Files = file_cell) %>%
       dplyr::select(-html_file, -rtf_file)
@@ -570,7 +765,7 @@ read_required_rds <- function(path, object_label = "RDS object") {
     stop(
       paste0(
         object_label, " could not be found at:\n", path,
-        "\nPlease run script 04_create_final_anonymized_dataset.R locally first, ",
+        "\nPlease run script 13_create_final_anonymized_dataset.R locally first, ",
         "or place the anonymized dataset file in data_final/."
       ),
       call. = FALSE

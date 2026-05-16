@@ -86,7 +86,7 @@ final_analysis_dataset <- read_required_rds(
   "Final matched anonymized analysis dataset"
 )
 
-message("Confirmation: Script 13 uses data_final/final_analysis_dataset_anonymized.rds.")
+message("Confirmation: Script 12 uses data_final/final_analysis_dataset_anonymized.rds.")
 
 analysis_source_name <- "final_analysis_dataset"
 analysis_raw <- final_analysis_dataset
@@ -784,7 +784,7 @@ purrr::iwalk(
 
 writexl::write_xlsx(
   tables_to_export,
-  path = file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx")
+  path = file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx")
 )
 
 # =========================================================
@@ -809,17 +809,17 @@ ggsave(
 
 writeLines(
   capture.output(summary(model_primary_round_factor)),
-  con = file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt")
+  con = file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt")
 )
 
 writeLines(
   capture.output(summary(model_controlled_q7)),
-  con = file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt")
+  con = file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt")
 )
 
 writeLines(
   capture.output(summary(model_ordinal_q7)),
-  con = file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt")
+  con = file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt")
 )
 
 # =========================================================
@@ -884,21 +884,21 @@ console_summary <- c(
   capture.output(print(change_direction_summary)),
   "",
   "Exported workbook:",
-  file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"),
+  file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
   "",
   "Exported figures:",
   file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
   file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
   "",
   "Model summaries:",
-  file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt"),
-  file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt"),
-  file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt")
+  file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt"),
+  file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt"),
+  file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt")
 )
 
 writeLines(
   console_summary,
-  con = file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt")
+  con = file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt")
 )
 
 writeLines(
@@ -1047,14 +1047,14 @@ method_results_report <- c(
   paste0("Tabellenordner: ", out_tables_dir),
   paste0("Grafikordner: ", out_figures_dir),
   paste0("Dokumentationsordner: ", out_doc_dir),
-  paste0("Kombinierte Excel-Datei: ", file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx")),
+  paste0("Kombinierte Excel-Datei: ", file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx")),
   "",
   "==================== END OF REPORT ===================="
 )
 
 writeLines(
   method_results_report,
-  con = file.path(out_doc_dir, "13_image_agreement_method_results_report.txt")
+  con = file.path(out_doc_dir, "12_image_agreement_method_results_report.txt")
 )
 
 # =========================================================
@@ -1085,13 +1085,13 @@ other_manifest <- tibble(
     "ChatGPT summary"
   ),
   path = c(
-    file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"),
+    file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
     file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
     file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
-    file.path(out_doc_dir, "13_model1_primary_round_factor_summary.txt"),
-    file.path(out_doc_dir, "13_model2_controlled_q7_summary.txt"),
-    file.path(out_doc_dir, "13_model3_ordinal_q7_summary.txt"),
-    file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt"),
+    file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt"),
+    file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt"),
+    file.path(out_doc_dir, "12_model3_ordinal_q7_summary.txt"),
+    file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt"),
     file.path(project_root, "data_output", "RESULTS_FOR_CHATGPT_image_agreement_final_unified.txt")
   ),
   notes = c(
@@ -1130,9 +1130,9 @@ if (exists("build_general_export_index")) {
 message("Confirmation: Final unified image agreement analysis was exported successfully.")
 message("Tables: ", out_tables_dir)
 message("Figures: ", out_figures_dir)
-message("Workbook: ", file.path(out_base_dir, "13_image_agreement_final_unified_tables.xlsx"))
+message("Workbook: ", file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"))
 message("Local index: ", file.path(out_doc_dir, "00_export_index.html"))
-message("Console summary: ", file.path(out_doc_dir, "13_image_agreement_final_unified_console_summary.txt"))
+message("Console summary: ", file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt"))
 message("ChatGPT summary: ", file.path(project_root, "data_output", "RESULTS_FOR_CHATGPT_image_agreement_final_unified.txt"))
 
 #####################################################################

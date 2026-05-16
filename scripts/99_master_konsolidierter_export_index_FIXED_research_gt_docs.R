@@ -14,6 +14,7 @@
 # Arbeitsergebnisse:
 # - HTML-Tabellen
 # - RTF-Tabellen
+# - DOCX-Tabellen
 # - PNG-Plots
 #
 # Nicht in "Output for Research" übernommen werden:
@@ -101,7 +102,7 @@ out_master_dir <- file.path(project_root, "data_output", "project_master_index")
 out_doc_dir    <- file.path(out_master_dir, "documentation")
 
 # Zentraler Sammelordner. Darin erhält jeder Skriptabschnitt einen eigenen
-# Unterordner mit ausschließlich HTML-/RTF-Tabellen und PNG-Plots.
+# Unterordner mit ausschließlich HTML-/RTF-/DOCX-Tabellen und PNG-Plots.
 out_research_root_dir <- file.path(out_master_dir, "Output for Research")
 
 ensure_directories(c(out_master_dir, out_doc_dir, out_research_root_dir))
@@ -252,6 +253,7 @@ summarise_export_space <- function(base_dir) {
     n_xlsx = count_by_extension(files, "\\.xlsx$"),
     n_png  = count_by_extension(files, "\\.png$"),
     n_rtf  = count_by_extension(files, "\\.rtf$"),
+    n_docx = count_by_extension(files, "\\.docx$"),
     n_txt  = count_by_extension(files, "\\.txt$")
   )
 }
@@ -278,17 +280,17 @@ is_research_candidate <- function(files) {
   basenames  <- basename(files_norm)
   ext        <- stringr::str_to_lower(tools::file_ext(files_norm))
 
-  allowed_ext <- ext %in% c("html", "rtf", "png")
+  allowed_ext <- ext %in% c("html", "rtf", "docx", "png")
 
   is_index_or_manifest <- stringr::str_detect(
     basenames,
-    regex("(^00_.*index|_index|master_export_manifest|export_manifest|console_summary)\\.(html|csv|xlsx|txt)$", ignore_case = TRUE)
+    regex("(^00_.*index|_index|master_export_manifest|export_manifest|console_summary)\\.(html|csv|xlsx|txt|docx)$", ignore_case = TRUE)
   )
 
   # Documentation/caption folders usually contain manifests, console summaries,
   # and helper files that should not be copied into "Output for Research".
   # Exception: some scripts, especially 01, store the actual gt table exports
-  # under data_output/documentation/gt_tables/html and .../rtf. These are
+  # under data_output/documentation/gt_tables/html, .../rtf and .../docx. These are
   # genuine research tables and must therefore be kept.
   is_documentation_file <- stringr::str_detect(
     files_norm,
@@ -297,7 +299,7 @@ is_research_candidate <- function(files) {
 
   is_gt_table_export <- stringr::str_detect(
     files_norm,
-    regex("/gt_tables/(html|rtf)/", ignore_case = TRUE)
+    regex("/gt_tables/(html|rtf|docx)/", ignore_case = TRUE)
   )
 
   allowed_ext & !is_index_or_manifest & (!is_documentation_file | is_gt_table_export)
@@ -309,6 +311,7 @@ classify_research_file <- function(file) {
   dplyr::case_when(
     ext == "html" ~ "Tables_HTML",
     ext == "rtf"  ~ "Tables_RTF",
+    ext == "docx" ~ "Tables_DOCX",
     ext == "png"  ~ "Plots",
     TRUE ~ "Other"
   )
@@ -347,7 +350,7 @@ collect_research_files <- function(section_row) {
       extension = stringr::str_to_lower(tools::file_ext(source_path)),
       category = classify_research_file(source_path)
     ) %>%
-    filter(category %in% c("Tables_HTML", "Tables_RTF", "Plots")) %>%
+    filter(category %in% c("Tables_HTML", "Tables_RTF", "Tables_DOCX", "Plots")) %>%
     arrange(category, basename(source_path))
 }
 
@@ -402,11 +405,12 @@ build_research_index_html <- function(section_row, research_tbl, research_dir, r
     paste0("  <p>", html_escape_simple(section_row$description), "</p>"),
     paste0(
       "  <div class=\"summary-box\">",
-      "<strong>Enthalten:</strong> nur HTML-Tabellen, RTF-Tabellen und PNG-Plots.",
+      "<strong>Enthalten:</strong> nur HTML-Tabellen, RTF-Tabellen, DOCX-Tabellen und PNG-Plots.",
       "<br><strong>Nicht enthalten:</strong> CSV, XLSX, TXT, lokale Index- und Dokumentationsdateien.",
       "<br><strong>Dateien:</strong> gesamt=", nrow(research_tbl),
       " | html=", sum(research_tbl$extension == "html"),
       " | rtf=", sum(research_tbl$extension == "rtf"),
+      " | docx=", sum(research_tbl$extension == "docx"),
       " | png=", sum(research_tbl$extension == "png"),
       "</div>"
     ),
@@ -432,6 +436,7 @@ create_research_output_for_section <- function(section_row) {
     research_dir,
     file.path(research_dir, "Tables_HTML"),
     file.path(research_dir, "Tables_RTF"),
+    file.path(research_dir, "Tables_DOCX"),
     file.path(research_dir, "Plots")
   ))
 
@@ -471,6 +476,7 @@ create_research_output_for_section <- function(section_row) {
     n_research_files_total = nrow(research_tbl),
     n_research_html = sum(research_tbl$extension == "html"),
     n_research_rtf = sum(research_tbl$extension == "rtf"),
+    n_research_docx = sum(research_tbl$extension == "docx"),
     n_research_png = sum(research_tbl$extension == "png")
   )
 }
@@ -504,10 +510,12 @@ build_section_table <- function(section_row, from_dir) {
     `XLSX` = files_summary$n_xlsx,
     `PNG` = files_summary$n_png,
     `RTF` = files_summary$n_rtf,
+    `DOCX` = files_summary$n_docx,
     `TXT` = files_summary$n_txt,
     `Research Dateien gesamt` = section_row$n_research_files_total,
     `Research HTML` = section_row$n_research_html,
     `Research RTF` = section_row$n_research_rtf,
+    `Research DOCX` = section_row$n_research_docx,
     `Research PNG` = section_row$n_research_png
   )
 }
@@ -549,17 +557,7 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
 
-  "04", "Final anonymized dataset", "Erstellung der anonymisierten Analyse-Datensätze aus 04_create_final_anonymized_dataset.R.",
-  file.path(project_root, "data_final"),
-  NA_character_,
-  file.path(project_root, "data_final"),
-  NA_character_,
-  NA_character_,
-  NA_character_,
-  NA_character_,
-  NA_character_,
-
-  "05", "Variablenübersicht", "Variablenübersicht aus 05_variablenuebersicht.R: Variableninventar mit Normierung, Typen und GT-Index.",
+  "05", "Variablenübersicht", "Variablenübersicht aus 04_variablenuebersicht.R: Variableninventar mit Normierung, Typen und GT-Index.",
   file.path(project_root, "data_output", "variable_inventory"),
   file.path(project_root, "data_output", "variable_inventory", "gt_tables", "00_gt_index.html"),
   file.path(project_root, "data_output", "variable_inventory", "tables"),
@@ -586,8 +584,8 @@ script_registry <- tibble::tribble(
   NA_character_,
   NA_character_,
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation"),
-  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "07_pre_survey_premerge_requested_descriptives.xlsx"),
-  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation", "07_pre_survey_premerge_requested_descriptives_console_summary.txt"),
+  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "08_pre_survey_premerge_requested_descriptives.xlsx"),
+  file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "documentation", "08_pre_survey_premerge_requested_descriptives_console_summary.txt"),
 
   "08", "Pre-survey GT tables", "Publikationsnahe GT-Tabellen für die angeforderten Pre-Survey-Deskriptiven.",
   file.path(project_root, "data_output", "descriptives", "pre_survey_premerge_requested", "gt_tables"),
@@ -616,8 +614,8 @@ script_registry <- tibble::tribble(
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_viviq_level_effects", "10_viviq_level_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation", "10_viviq_level_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_viviq_level_effects", "11_viviq_level_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_viviq_level_effects", "documentation", "11_viviq_level_effect_console_summary.txt"),
 
   "11", "Q6 duration effect plots", "Zusatzplots und Tabellen nach Nutzungsdauer aus Pre_Survey_Q6.",
   file.path(project_root, "data_output", "main_study_q6_duration_effects"),
@@ -626,8 +624,8 @@ script_registry <- tibble::tribble(
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_q6_duration_effects", "11_q6_duration_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation", "11_q6_duration_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_q6_duration_effects", "12_q6_duration_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_q6_duration_effects", "documentation", "12_q6_duration_effect_console_summary.txt"),
 
   "12", "Target-word-category effect plots", "Zusatzplots und Tabellen nach Target-Word-Kategorie.",
   file.path(project_root, "data_output", "main_study_target_word_category_effects"),
@@ -636,8 +634,8 @@ script_registry <- tibble::tribble(
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation"),
-  file.path(project_root, "data_output", "main_study_target_word_category_effects", "12_target_word_category_effect_tables.xlsx"),
-  file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation", "12_target_word_category_effect_console_summary.txt"),
+  file.path(project_root, "data_output", "main_study_target_word_category_effects", "13_target_word_category_effect_tables.xlsx"),
+  file.path(project_root, "data_output", "main_study_target_word_category_effects", "documentation", "13_target_word_category_effect_console_summary.txt"),
 
   "13", "Image agreement LMM analysis", "Abschließende Image-Agreement-Analyse mit Round-only und kontrolliertem LMM.",
   file.path(project_root, "data_output", "image_agreement_lmm_analysis"),
@@ -646,8 +644,8 @@ script_registry <- tibble::tribble(
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "figures"),
   NA_character_,
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation"),
-  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "13_image_agreement_final_unified_tables.xlsx"),
-  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "13_image_agreement_final_unified_console_summary.txt")
+  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "12_image_agreement_lmm_analysis_tables.xlsx"),
+  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "12_image_agreement_lmm_console_summary.txt")
 )
 
 # =========================================================
@@ -711,6 +709,7 @@ master_manifest <- purrr::pmap_dfr(
            n_research_files_total,
            n_research_html,
            n_research_rtf,
+           n_research_docx,
            n_research_png) {
 
     section_row <- tibble(
@@ -730,6 +729,7 @@ master_manifest <- purrr::pmap_dfr(
       n_research_files_total = n_research_files_total,
       n_research_html = n_research_html,
       n_research_rtf = n_research_rtf,
+      n_research_docx = n_research_docx,
       n_research_png = n_research_png
     )
 
@@ -772,6 +772,7 @@ section_html <- purrr::pmap_chr(
            n_research_files_total,
            n_research_html,
            n_research_rtf,
+           n_research_docx,
            n_research_png) {
 
     summary_tbl <- summarise_export_space(base_output_dir)
@@ -779,7 +780,7 @@ section_html <- purrr::pmap_chr(
 
     links <- c(
       if (path_exists_safe(resolved_local_index_file)) paste0("<li>", make_link_html(resolved_local_index_file, "Lokalen Unterindex öffnen", out_master_dir), "</li>") else "",
-      if (path_exists_safe(research_index_file)) paste0("<li><strong>", make_link_html(research_index_file, "Output for Research", out_master_dir), "</strong> <span class=\"hint\">nur HTML-/RTF-Tabellen und PNG-Plots</span></li>") else "",
+      if (path_exists_safe(research_index_file)) paste0("<li><strong>", make_link_html(research_index_file, "Output for Research", out_master_dir), "</strong> <span class=\"hint\">nur HTML-/RTF-/DOCX-Tabellen und PNG-Plots</span></li>") else "",
       if (path_exists_safe(base_output_dir)) paste0("<li>", make_link_html(base_output_dir, "Basisordner öffnen", out_master_dir), "</li>") else "",
       if (path_exists_safe(tables_dir)) paste0("<li>", make_link_html(tables_dir, "Tabellenordner", out_master_dir), "</li>") else "",
       if (path_exists_safe(figures_dir)) paste0("<li>", make_link_html(figures_dir, "Figurenordner", out_master_dir), "</li>") else "",
@@ -807,12 +808,14 @@ section_html <- purrr::pmap_chr(
       ' | xlsx=', summary_tbl$n_xlsx,
       ' | png=', summary_tbl$n_png,
       ' | rtf=', summary_tbl$n_rtf,
+      ' | docx=', summary_tbl$n_docx,
       ' | txt=', summary_tbl$n_txt,
       '</p>',
       '<p><strong>Output for Research:</strong> ',
       'gesamt=', n_research_files_total,
       ' | html=', n_research_html,
       ' | rtf=', n_research_rtf,
+      ' | docx=', n_research_docx,
       ' | png=', n_research_png,
       ' <span class="hint">CSV/XLSX werden hier bewusst nicht übernommen.</span>',
       '</p>',
@@ -855,7 +858,7 @@ master_index_html <- c(
     make_link_html(file.path(out_master_dir, "99_master_export_manifest.csv"), "99_master_export_manifest.csv", out_master_dir),
     "<br><strong>Output for Research:</strong> ",
     make_link_html(out_research_root_dir, "zentralen Sammelordner öffnen", out_master_dir),
-    "<br><span class=\"hint\">Die Output-for-Research-Ordner enthalten nur HTML-/RTF-Tabellen und PNG-Plots; keine CSV- oder XLSX-Dateien.</span>",
+    "<br><span class=\"hint\">Die Output-for-Research-Ordner enthalten nur HTML-/RTF-/DOCX-Tabellen und PNG-Plots; keine CSV- oder XLSX-Dateien.</span>",
     "</div>"
   ),
   section_html,
