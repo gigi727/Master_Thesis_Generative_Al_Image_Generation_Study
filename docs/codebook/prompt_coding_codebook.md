@@ -1,59 +1,59 @@
-# Prompt-Coding-Codebook
+# Prompt-Coding Codebook
 
-Dieses Codebook dokumentiert die manuelle Codierung der Drei-Runden-Prompt-Sequenzen.
+This codebook documents the manual coding of three-round prompt sequences.
 
-## Einheit der Analyse
+## Unit of analysis
 
-Eine Beobachtung entspricht einem Fall: eine Person, eine Datenzeile und eine vollständige Drei-Runden-Sequenz. Die Runden 1, 2 und 3 werden zunächst einzeln codiert. Danach wird die gesamte Sequenz als zusätzliche analytische Einheit klassifiziert.
+One observation corresponds to one case: one person, one data row, and one complete three-round sequence. Rounds 1, 2, and 3 are first coded individually. The entire sequence is then classified as an additional analytical unit.
 
 ## Round-level coding
 
-Jede Runde wird in derselben Reihenfolge codiert.
+Each round is coded in the same order.
 
 ### Function code
 
-| Code | Bedeutung | Entscheidungsregel |
+| Code | Meaning | Decision rule |
 |---|---|---|
-| F1 | Generation prompt | Der Prompt beschreibt ein Bild von Grund auf. |
-| F2 | Edit prompt | Der Prompt bezieht sich auf ein bestehendes Bild und verändert es lokal. |
-| F3 | Re-generation / complete reformulation | Eine spätere Runde beschreibt das Bild erneut fast vollständig von Grund auf. |
-| F4 | Meta-/repair prompt | Der Prompt korrigiert den Prozess, z. B. Rückkehr zu einer vorherigen Version. |
+| F1 | Generation prompt | The prompt describes an image from scratch. |
+| F2 | Edit prompt | The prompt refers to an existing image and modifies it locally. |
+| F3 | Re-generation / complete reformulation | A later round describes the image again almost entirely from scratch. |
+| F4 | Meta-/repair prompt | The prompt corrects the process, e.g., returning to a previous version. |
 
-Kernregel: Wenn der Prompt klar auf ein bestehendes Bild verweist, wird er als F2 codiert. Wenn er erneut eine vollständige Bildbeschreibung formuliert, wird er als F3 codiert.
+Core rule: If the prompt clearly refers to an existing image, it is coded as F2. If it formulates a complete image description again, it is coded as F3.
 
 ### Prompt-engineering level
 
-Der Prompt-engineering level wird für F1, F2, F3 und F4 codiert.
+The prompt-engineering level is coded for F1, F2, F3, and F4.
 
-| Level | Bedeutung | Kurzbeschreibung |
+| Level | Meaning | Short description |
 |---|---|---|
-| L1 | Low | Basismotiv, wenig Kontrolle, kaum Komposition, kaum Stil, keine klaren Constraints. |
-| L2 | Medium | Kontrollierbares Motiv mit mehreren relevanten Spezifikationen, z. B. Setting, Perspektive oder Stil. |
-| L3 | High | Starke Kontrolle über Bildwirkung, Komposition und Stil, mit präzisen räumlichen Hinweisen, Details und Constraints. |
+| L1 | Low | Basic motif, little control, hardly any composition, hardly any style, no clear constraints. |
+| L2 | Medium | Controllable motif with several relevant specifications, e.g., setting, perspective, or style. |
+| L3 | High | Strong control over image effect, composition, and style, with precise spatial cues, details, and constraints. |
 
-Leitfragen: Wie präzise ist das Subjekt? Wie klar sind Form, Komposition oder Perspektive? Wie ausgearbeitet sind Stil, Modifier und Qualitätsangaben? Gibt es Constraints oder gezielte Begrenzungen?
+Guiding questions: How precise is the subject? How clear are form, composition, or perspective? How elaborated are style, modifiers, and quality specifications? Are there constraints or targeted limitations?
 
 ### Vibe prompting
 
-Vibe prompting ist vorhanden, wenn ein Prompt nicht nur sichtbare Elemente, sondern gezielt Stimmung, Atmosphäre oder subjektive Wirkung beschreibt. Typische Indikatoren sind z. B. „warm“, „cozy“, „tense“, „nostalgic“, „mysterious“, „eerie“, „calm“, „dreamlike“ oder „melancholic“.
+Vibe prompting is present when a prompt describes not only visible elements but also deliberately specifies mood, atmosphere, or subjective effect. Typical indicators include, for example, “warm,” “cozy,” “tense,” “nostalgic,” “mysterious,” “eerie,” “calm,” “dreamlike,” or “melancholic.”
 
-Kernregel: Wenn der Prompt primär sichtbare Entitäten, Komposition oder Szenenstruktur spezifiziert, wird kein Vibe-Code vergeben. Wenn er ausdrücklich Stimmung, Atmosphäre oder emotionalen Ton aufruft, ist Vibe prompting vorhanden.
+Core rule: If the prompt primarily specifies visible entities, composition, or scene structure, no vibe code is assigned. If it explicitly evokes mood, atmosphere, or emotional tone, vibe prompting is present.
 
 ## Sequence-level coding
 
-Nach der Codierung der drei Runden wird die geordnete Funktionssequenz gebildet, z. B. `F1-F2-F2`. Die Reihenfolge ist analytisch entscheidend: `F1-F2-F3` ist nicht identisch mit `F1-F3-F2`.
+After coding the three rounds, the ordered function sequence is formed, e.g., `F1-F2-F2`. The order is analytically decisive: `F1-F2-F3` is not identical to `F1-F3-F2`.
 
-| Sequence type | Funktionssequenz | Bedeutung |
+| Sequence type | Function sequence | Meaning |
 |---|---:|---|
-| S1 – Iterative Refinement | F1-F2-F2 | Initiale Spezifikation mit zwei anschließenden lokalen Verfeinerungen. |
-| S2 – Double Re-specification | F1-F3-F3 | Wiederholte vollständige Reformulierung statt lokaler Bearbeitung. |
-| S3 – Re-specification with Final Refinement | F1-F3-F2 | Erst globaler Neustart, danach lokale Schlusskorrektur. |
-| S4 – Refinement Followed by Re-specification | F1-F2-F3 | Zunächst lokale Korrektur, danach Wechsel zu vollständiger Reformulierung. |
-| S5 – Refinement with Reversion | F1-F2-F4 | Initiale Spezifikation, Edit und abschließende Prozesskorrektur/Rückkehr. |
+| S1 – Iterative Refinement | F1-F2-F2 | Initial specification followed by two local refinements. |
+| S2 – Double Re-specification | F1-F3-F3 | Repeated complete reformulation instead of local editing. |
+| S3 – Re-specification with Final Refinement | F1-F3-F2 | First a global restart, followed by a local final correction. |
+| S4 – Refinement Followed by Re-specification | F1-F2-F3 | First a local correction, followed by a shift to complete reformulation. |
+| S5 – Refinement with Reversion | F1-F2-F4 | Initial specification, edit, and final process correction/reversion. |
 
-Die Sequenzklassifikation gruppiert Fälle exakt nach ihrer geordneten Funktionssequenz. Es handelt sich nicht um ein distanzbasiertes Clustering, sondern um eine typologische Gruppierung nominaler Codes unter Berücksichtigung der Reihenfolge.
+The sequence classification groups cases exactly according to their ordered function sequence. It is not distance-based clustering, but a typological grouping of nominal codes while taking order into account.
 
-## Literaturbasis
+## Literature base
 
 - Liu, V., & Chilton, L. B. (2022). *Design Guidelines for Prompt Engineering Text-to-Image Generative Models*. CHI. DOI: 10.1145/3491102.3501825.
 - Xie, Y., Pan, Z., Ma, J., Jie, L., & Mei, Q. (2023). *A Prompt Log Analysis of Text-to-Image Generation Systems*. WWW ’23. DOI: 10.1145/3543507.3587430.
