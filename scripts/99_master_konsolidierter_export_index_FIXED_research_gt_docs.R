@@ -280,8 +280,6 @@ is_research_candidate <- function(files) {
   basenames  <- basename(files_norm)
   ext        <- stringr::str_to_lower(tools::file_ext(files_norm))
 
-  allowed_ext <- ext %in% c("html", "rtf", "docx", "png")
-
   is_index_or_manifest <- stringr::str_detect(
     basenames,
     regex("(^00_.*index|_index|master_export_manifest|export_manifest|console_summary)\\.(html|csv|xlsx|txt|docx)$", ignore_case = TRUE)
@@ -301,6 +299,13 @@ is_research_candidate <- function(files) {
     files_norm,
     regex("/gt_tables/(html|rtf|docx)/", ignore_case = TRUE)
   )
+
+  # HTML/RTF tables and PNG plots can come from the registered table/figure
+  # folders. DOCX tables are only copied from gt_tables/docx so that the Word
+  # outputs have the same title, subtitle, column labels and remarks as the GT
+  # publication tables. Generic CSV/XLSX-derived DOCX files are intentionally
+  # not copied into "Output for Research".
+  allowed_ext <- ext %in% c("html", "rtf", "png") | (ext == "docx" & is_gt_table_export)
 
   allowed_ext & !is_index_or_manifest & (!is_documentation_file | is_gt_table_export)
 }

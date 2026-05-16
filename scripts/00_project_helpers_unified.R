@@ -216,6 +216,44 @@ write_csv_project <- function(df, path, mode = project_csv_export_mode, na = "")
 # 5a) Einheitliche DOCX-Tabellenexports                    ===
 # =========================================================
 
+# Diese Funktionen ergänzen ausschließlich die Exportebene.
+# Sie verändern keine Analyse-, Bereinigungs- oder Tabellenmethodik.
+
+`%||%` <- function(x, y) {
+  if (is.null(x) || length(x) == 0 || all(is.na(x))) y else x
+}
+
+docx_text_clean <- function(x) {
+  if (is.null(x) || length(x) == 0) {
+    return(NA_character_)
+  }
+
+  if (inherits(x, c("html", "shiny.tag", "shiny.tag.list"))) {
+    x <- as.character(x)
+  }
+
+  if (is.list(x)) {
+    x <- unlist(x, recursive = TRUE, use.names = FALSE)
+  }
+
+  x <- as.character(x)
+  x <- x[!is.na(x) & nzchar(x)]
+
+  if (length(x) == 0) {
+    return(NA_character_)
+  }
+
+  x <- paste(x, collapse = " ")
+  x <- gsub("<[^>]+>", "", x)
+  x <- gsub("&nbsp;", " ", x, fixed = TRUE)
+  x <- gsub("&amp;", "&", x, fixed = TRUE)
+  x <- gsub("&lt;", "<", x, fixed = TRUE)
+  x <- gsub("&gt;", ">", x, fixed = TRUE)
+  x <- gsub("&quot;", '"', x, fixed = TRUE)
+  x <- gsub("&#39;", "'", x, fixed = TRUE)
+  stringr::str_squish(x)
+}
+
 coerce_docx_table_data <- function(df) {
   df <- as.data.frame(df, stringsAsFactors = FALSE)
 
@@ -238,79 +276,47 @@ coerce_docx_table_data <- function(df) {
   df
 }
 
-make_flextable_academic <- function(df,
-                                    title_text = NULL,
-                                    subtitle_text = NULL,
-                                    source_note = NULL,
-                                    fontname = "Arial") {
-  df <- coerce_docx_table_data(df)
+extract_gt_heading_value <- function(gt_tbl, field = c("title", "subtitle")) {
+  field <- match.arg(field)
 
-  border_main <- officer::fp_border(color = "#666666", width = 1.25)
+  attr_name <- if (field == "title") "docx_title_text" else "docx_subtitle_text"
+  value <- attr(gt_tbl, attr_name, exact = TRUE)
+  value <- docx_text_clean(value)
 
-  ft <- flextable::flextable(df) %>%
-    flextable::border_remove() %>%
-    flextable::hline_top(part = "header", border = border_main) %>%
-    flextable::hline_bottom(part = "header", border = border_main) %>%
-    flextable::hline_bottom(part = "body", border = border_main) %>%
-    flextable::bold(part = "header") %>%
-    flextable::font(fontname = fontname, part = "all") %>%
-    flextable::fontsize(size = 9, part = "all") %>%
-    flextable::align(align = "left", part = "all") %>%
-    flextable::valign(valign = "top", part = "all") %>%
-    flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
-    flextable::set_table_properties(layout = "autofit", width = 1) %>%
-    flextable::autofit()
+  if (!is.na(value) && nzchar(value)) {
+    return(value)
+  }
 
-  header_lines <- c(title_text, subtitle_text)
-  header_lines <- header_lines[!is.na(header_lines) & nzchar(header_lines)]
-
-  if (length(header_lines) > 0) {
-    for (header_line in rev(header_lines)) {
-      ft <- ft %>% flextable::add_header_lines(values = header_line)
+  if ("_heading" %in% names(gt_tbl)) {
+    heading <- gt_tbl[["_heading"]]
+    if (is.list(heading) && field %in% names(heading)) {
+      value <- docx_text_clean(heading[[field]])
+      if (!is.na(value) && nzchar(value)) {
+        return(value)
+      }
     }
-    ft <- ft %>%
-      flextable::bold(i = 1, part = "header") %>%
-      flextable::fontsize(i = 1, size = 10, part = "header")
   }
 
-  if (!is.null(source_note) && !is.na(source_note) && nzchar(source_note)) {
-    ft <- ft %>%
-      flextable::add_footer_lines(values = source_note) %>%
-      flextable::italic(part = "footer") %>%
-      flextable::fontsize(size = 8, part = "footer")
+  NA_character_
+}
+
+extract_gt_source_note_value <- function(gt_tbl) {
+  value <- attr(gt_tbl, "docx_source_note", exact = TRUE)
+  value <- docx_text_clean(value)
+
+  if (!is.na(value) && nzchar(value)) {
+    return(value)
   }
 
-  ft
-}
+  if ("_source_notes" %in% names(gt_tbl)) {
+    notes <- gt_tbl[["_source_notes"]]
+    value <- docx_text_clean(notes)
+    if (!is.na(value) && nzchar(value)) {
+      return(value)
+    }
+  }
 
-save_docx_table <- function(df,
-                            path,
-                            title_text = NULL,
-                            subtitle_text = NULL,
-                            source_note = NULL) {
-  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
-
-  ft <- make_flextable_academic(
-    df = df,
-    title_text = title_text,
-    subtitle_text = subtitle_text,
-    source_note = source_note
-  )
-
-  flextable::save_as_docx(ft, path = path)
-  invisible(path)
-}
-
-attach_gt_docx_source <- function(gt_tbl,
-                                  data,
-                                  title_text = NULL,
-                                  subtitle_text = NULL,
-                                  source_note = NULL) {
-  attr(gt_tbl, "docx_source_data") <- data
-  attr(gt_tbl, "docx_title_text") <- title_text
-  attr(gt_tbl, "docx_subtitle_text") <- subtitle_text
-  attr(gt_tbl, "docx_source_note") <- source_note
-  gt_tbl
+  NA_character_
 }
 
 extract_gt_docx_source_data <- function(gt_tbl) {
@@ -327,11 +333,165 @@ extract_gt_docx_source_data <- function(gt_tbl) {
   NULL
 }
 
+extract_gt_column_labels <- function(gt_tbl, source_data = NULL) {
+  if (is.null(source_data)) {
+    source_data <- extract_gt_docx_source_data(gt_tbl)
+  }
+
+  if (is.null(source_data)) {
+    return(NULL)
+  }
+
+  column_names <- names(source_data)
+  labels <- column_names
+
+  if ("_boxhead" %in% names(gt_tbl) && is.data.frame(gt_tbl[["_boxhead"]])) {
+    boxhead <- gt_tbl[["_boxhead"]]
+
+    if (all(c("var", "column_label") %in% names(boxhead))) {
+      matched <- match(column_names, as.character(boxhead$var))
+      gt_labels <- vapply(matched, function(i) {
+        if (is.na(i)) {
+          return(NA_character_)
+        }
+        docx_text_clean(boxhead$column_label[[i]])
+      }, character(1))
+
+      labels <- ifelse(!is.na(gt_labels) & nzchar(gt_labels), gt_labels, labels)
+    }
+  }
+
+  stats::setNames(as.list(labels), column_names)
+}
+
+make_flextable_academic <- function(df,
+                                    title_text = NULL,
+                                    subtitle_text = NULL,
+                                    source_note = NULL,
+                                    column_labels = NULL,
+                                    fontname = "Arial") {
+  df <- coerce_docx_table_data(df)
+
+  border_main <- officer::fp_border(color = "#666666", width = 1.25)
+
+  ft <- flextable::flextable(df)
+
+  if (!is.null(column_labels)) {
+    column_labels <- column_labels[names(column_labels) %in% names(df)]
+    if (length(column_labels) > 0) {
+      ft <- ft %>% flextable::set_header_labels(values = column_labels)
+    }
+  }
+
+  ft <- ft %>%
+    flextable::border_remove() %>%
+    flextable::hline_top(part = "header", border = border_main) %>%
+    flextable::hline_bottom(part = "header", border = border_main) %>%
+    flextable::hline_bottom(part = "body", border = border_main) %>%
+    flextable::bold(part = "header") %>%
+    flextable::font(fontname = fontname, part = "all") %>%
+    flextable::fontsize(size = 9, part = "all") %>%
+    flextable::align(align = "left", part = "all") %>%
+    flextable::valign(valign = "top", part = "all") %>%
+    flextable::padding(padding.top = 3, padding.bottom = 3, padding.left = 4, padding.right = 4, part = "all") %>%
+    flextable::set_table_properties(layout = "autofit", width = 1) %>%
+    flextable::autofit()
+
+  title_text <- docx_text_clean(title_text)
+  subtitle_text <- docx_text_clean(subtitle_text)
+  source_note <- docx_text_clean(source_note)
+
+  header_lines <- c(title_text, subtitle_text)
+  header_lines <- header_lines[!is.na(header_lines) & nzchar(header_lines)]
+
+  if (length(header_lines) > 0) {
+    for (header_line in rev(header_lines)) {
+      ft <- ft %>% flextable::add_header_lines(values = header_line)
+    }
+    ft <- ft %>%
+      flextable::bold(i = 1, part = "header") %>%
+      flextable::fontsize(i = 1, size = 10, part = "header")
+  }
+
+  if (!is.na(source_note) && nzchar(source_note)) {
+    ft <- ft %>%
+      flextable::add_footer_lines(values = source_note) %>%
+      flextable::italic(part = "footer") %>%
+      flextable::fontsize(size = 8, part = "footer")
+  }
+
+  ft
+}
+
+save_docx_table <- function(df,
+                            path,
+                            title_text = NULL,
+                            subtitle_text = NULL,
+                            source_note = NULL,
+                            column_labels = NULL) {
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+
+  ft <- make_flextable_academic(
+    df = df,
+    title_text = title_text,
+    subtitle_text = subtitle_text,
+    source_note = source_note,
+    column_labels = column_labels
+  )
+
+  flextable::save_as_docx(ft, path = path)
+  invisible(path)
+}
+
+save_gt_docx_table <- function(gt_tbl,
+                               path,
+                               file_stem = NULL) {
+  source_data <- extract_gt_docx_source_data(gt_tbl)
+
+  if (is.null(source_data)) {
+    stop("No source data are available for this gt object.", call. = FALSE)
+  }
+
+  title_text <- extract_gt_heading_value(gt_tbl, "title")
+  if ((is.na(title_text) || !nzchar(title_text)) && !is.null(file_stem)) {
+    title_text <- file_stem
+  }
+
+  subtitle_text <- extract_gt_heading_value(gt_tbl, "subtitle")
+  source_note <- extract_gt_source_note_value(gt_tbl)
+  column_labels <- extract_gt_column_labels(gt_tbl, source_data)
+
+  save_docx_table(
+    df = source_data,
+    path = path,
+    title_text = title_text,
+    subtitle_text = subtitle_text,
+    source_note = source_note,
+    column_labels = column_labels
+  )
+}
+
+attach_gt_docx_source <- function(gt_tbl,
+                                  data,
+                                  title_text = NULL,
+                                  subtitle_text = NULL,
+                                  source_note = NULL) {
+  attr(gt_tbl, "docx_source_data") <- data
+  attr(gt_tbl, "docx_title_text") <- docx_text_clean(title_text)
+  attr(gt_tbl, "docx_subtitle_text") <- docx_text_clean(subtitle_text)
+  attr(gt_tbl, "docx_source_note") <- docx_text_clean(source_note)
+  gt_tbl
+}
+
 save_table_outputs <- function(df,
                                base_filename,
                                out_dir,
                                csv_mode = project_csv_export_mode,
-                               docx = TRUE) {
+                               docx = FALSE,
+                               title_text = NULL,
+                               subtitle_text = NULL,
+                               source_note = NULL,
+                               column_labels = NULL) {
   csv_path  <- file.path(out_dir, paste0(base_filename, ".csv"))
   xlsx_path <- file.path(out_dir, paste0(base_filename, ".xlsx"))
   docx_path <- file.path(out_dir, paste0(base_filename, ".docx"))
@@ -343,7 +503,14 @@ save_table_outputs <- function(df,
   if (isTRUE(docx)) {
     tryCatch(
       {
-        save_docx_table(df, path = docx_path, title_text = base_filename)
+        save_docx_table(
+          df,
+          path = docx_path,
+          title_text = title_text %||% base_filename,
+          subtitle_text = subtitle_text,
+          source_note = source_note,
+          column_labels = column_labels
+        )
         saved_docx <- docx_path
       },
       error = function(e) {
@@ -445,30 +612,18 @@ save_gt_table <- function(gt_tbl,
     dir.create(out_gt_docx_dir, recursive = TRUE, showWarnings = FALSE)
     docx_path <- file.path(out_gt_docx_dir, paste0(file_stem, ".docx"))
 
-    source_data <- extract_gt_docx_source_data(gt_tbl)
-
-    if (!is.null(source_data)) {
-      tryCatch(
-        {
-          save_docx_table(
-            source_data,
-            path = docx_path,
-            title_text = attr(gt_tbl, "docx_title_text", exact = TRUE) %||% file_stem,
-            subtitle_text = attr(gt_tbl, "docx_subtitle_text", exact = TRUE),
-            source_note = attr(gt_tbl, "docx_source_note", exact = TRUE)
-          )
-          saved_docx <- docx_path
-        },
-        error = function(e) {
-          message(
-            "Note: DOCX export failed for '", file_stem,
-            "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
-          )
-        }
-      )
-    } else {
-      message("Note: DOCX export skipped for '", file_stem, "' because no source data were attached to the gt object.")
-    }
+    tryCatch(
+      {
+        save_gt_docx_table(gt_tbl, path = docx_path, file_stem = file_stem)
+        saved_docx <- docx_path
+      },
+      error = function(e) {
+        message(
+          "Note: DOCX export failed for '", file_stem,
+          "'. HTML/RTF exports still succeeded where supported. Details: ", e$message
+        )
+      }
+    )
   }
 
   tibble::tibble(

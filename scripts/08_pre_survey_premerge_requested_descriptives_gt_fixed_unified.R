@@ -435,25 +435,15 @@ save_gt_table <- function(gt_tbl, file_stem) {
     }
   )
 
-  source_data <- extract_gt_docx_source_data(gt_tbl)
-
-  if (!is.null(source_data)) {
-    tryCatch(
-      {
-        save_docx_table(
-          source_data,
-          path = docx_path,
-          title_text = attr(gt_tbl, "docx_title_text", exact = TRUE) %||% file_stem,
-          subtitle_text = attr(gt_tbl, "docx_subtitle_text", exact = TRUE),
-          source_note = attr(gt_tbl, "docx_source_note", exact = TRUE)
-        )
-        saved_docx <- docx_path
-      },
-      error = function(e) {
+  tryCatch(
+    {
+      save_gt_docx_table(gt_tbl, path = docx_path, file_stem = file_stem)
+      saved_docx <- docx_path
+    },
+    error = function(e) {
         message("Note: DOCX export failed for '", file_stem, "'. HTML/RTF exports still succeeded where supported. Details: ", e$message)
-      }
-    )
-  }
+    }
+  )
 
   tibble(
     object_name = file_stem,
