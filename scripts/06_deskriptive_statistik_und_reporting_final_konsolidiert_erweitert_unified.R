@@ -1677,6 +1677,215 @@ plot_main_q51_boxplot_overall_category <- gridExtra::arrangeGrob(
 )
 
 
+# ---------------------------------------------------------
+# ReqFig7: viviq_total_score boxplot with table-style remark
+# ---------------------------------------------------------
+
+viviq_total_score_boxplot_data <- bind_rows(
+  final_analysis_dataset %>%
+    transmute(
+      category_group = "Overall",
+      viviq_total_score_value = suppressWarnings(as.numeric(viviq_total_score))
+    ),
+  final_analysis_dataset %>%
+    filter(Main_Survey_target_word_category %in% c("abstract", "concrete")) %>%
+    transmute(
+      category_group = Main_Survey_target_word_category,
+      viviq_total_score_value = suppressWarnings(as.numeric(viviq_total_score))
+    )
+) %>%
+  filter(!is.na(viviq_total_score_value)) %>%
+  mutate(
+    category_group = factor(
+      category_group,
+      levels = c("Overall", "abstract", "concrete"),
+      ordered = TRUE
+    )
+  )
+
+viviq_total_score_boxplot_stats_table <- viviq_total_score_boxplot_data %>%
+  group_by(category_group) %>%
+  summarise(
+    n_valid = n(),
+    mean = round(mean(viviq_total_score_value, na.rm = TRUE), 2),
+    median = round(median(viviq_total_score_value, na.rm = TRUE), 2),
+    q1 = round(quantile(viviq_total_score_value, 0.25, na.rm = TRUE), 2),
+    q3 = round(quantile(viviq_total_score_value, 0.75, na.rm = TRUE), 2),
+    min = round(min(viviq_total_score_value, na.rm = TRUE), 2),
+    max = round(max(viviq_total_score_value, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  mutate(category_group = as.character(category_group))
+
+viviq_total_score_question_title <- "VIVIQ total score"
+viviq_total_score_question_title <- stringr::str_wrap(viviq_total_score_question_title, width = 90)
+viviq_total_score_question_subtitle <- "Derived variable: viviq_total_score"
+
+viviq_total_score_boxplot_stats_table_for_plot <- viviq_total_score_boxplot_stats_table %>%
+  transmute(
+    `Target word category` = category_group,
+    `n` = n_valid,
+    `Mean` = sprintf("%.2f", mean),
+    `Median` = sprintf("%.2f", median),
+    `Q1` = sprintf("%.2f", q1),
+    `Q3` = sprintf("%.2f", q3),
+    `Min` = sprintf("%.2f", min),
+    `Max` = sprintf("%.2f", max)
+  )
+
+viviq_total_score_boxplot_stats_grob <- gridExtra::tableGrob(
+  viviq_total_score_boxplot_stats_table_for_plot,
+  rows = NULL,
+  theme = gridExtra::ttheme_minimal(
+    base_size = 9,
+    core = list(
+      fg_params = list(hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    ),
+    colhead = list(
+      fg_params = list(fontface = "bold", hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    )
+  )
+)
+
+plot_viviq_total_score_boxplot_overall_category_base <- ggplot(
+  viviq_total_score_boxplot_data,
+  aes(x = category_group, y = viviq_total_score_value)
+) +
+  geom_boxplot(width = 0.45, outlier.alpha = 0.7) +
+  facet_wrap(~ category_group, nrow = 1) +
+  labs(
+    title = viviq_total_score_question_title,
+    subtitle = viviq_total_score_question_subtitle,
+    x = NULL,
+    y = "VIVIQ total score"
+  ) +
+  theme_result() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    plot.caption = element_blank(),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+plot_viviq_total_score_boxplot_overall_category <- gridExtra::arrangeGrob(
+  plot_viviq_total_score_boxplot_overall_category_base,
+  viviq_total_score_boxplot_stats_grob,
+  ncol = 1,
+  heights = c(4.8, 1.2)
+)
+
+
+# ---------------------------------------------------------
+# ReqFig8: Main_Survey_Q55 age boxplot with table-style remark
+# ---------------------------------------------------------
+
+main_q55_age_boxplot_data <- bind_rows(
+  final_analysis_dataset %>%
+    transmute(
+      category_group = "Overall",
+      q55_age_value = suppressWarnings(as.numeric(Main_Survey_Q55))
+    ),
+  final_analysis_dataset %>%
+    filter(Main_Survey_target_word_category %in% c("abstract", "concrete")) %>%
+    transmute(
+      category_group = Main_Survey_target_word_category,
+      q55_age_value = suppressWarnings(as.numeric(Main_Survey_Q55))
+    )
+) %>%
+  filter(!is.na(q55_age_value)) %>%
+  mutate(
+    category_group = factor(
+      category_group,
+      levels = c("Overall", "abstract", "concrete"),
+      ordered = TRUE
+    )
+  )
+
+main_q55_age_boxplot_stats_table <- main_q55_age_boxplot_data %>%
+  group_by(category_group) %>%
+  summarise(
+    n_valid = n(),
+    mean = round(mean(q55_age_value, na.rm = TRUE), 2),
+    median = round(median(q55_age_value, na.rm = TRUE), 2),
+    q1 = round(quantile(q55_age_value, 0.25, na.rm = TRUE), 2),
+    q3 = round(quantile(q55_age_value, 0.75, na.rm = TRUE), 2),
+    min = round(min(q55_age_value, na.rm = TRUE), 2),
+    max = round(max(q55_age_value, na.rm = TRUE), 2),
+    .groups = "drop"
+  ) %>%
+  mutate(category_group = as.character(category_group))
+
+main_q55_age_question_title <- get_variable_label("Main_Survey_Q55")
+
+if (
+  is.na(main_q55_age_question_title) ||
+  !nzchar(main_q55_age_question_title) ||
+  main_q55_age_question_title == "Main_Survey_Q55"
+) {
+  main_q55_age_question_title <- "Age"
+}
+
+main_q55_age_question_title <- stringr::str_wrap(main_q55_age_question_title, width = 90)
+main_q55_age_question_subtitle <- "Question No. Main_Survey_Q55"
+
+main_q55_age_boxplot_stats_table_for_plot <- main_q55_age_boxplot_stats_table %>%
+  transmute(
+    `Target word category` = category_group,
+    `n` = n_valid,
+    `Mean` = sprintf("%.2f", mean),
+    `Median` = sprintf("%.2f", median),
+    `Q1` = sprintf("%.2f", q1),
+    `Q3` = sprintf("%.2f", q3),
+    `Min` = sprintf("%.2f", min),
+    `Max` = sprintf("%.2f", max)
+  )
+
+main_q55_age_boxplot_stats_grob <- gridExtra::tableGrob(
+  main_q55_age_boxplot_stats_table_for_plot,
+  rows = NULL,
+  theme = gridExtra::ttheme_minimal(
+    base_size = 9,
+    core = list(
+      fg_params = list(hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    ),
+    colhead = list(
+      fg_params = list(fontface = "bold", hjust = 0.5, x = 0.5),
+      padding = grid::unit(c(3, 3), "mm")
+    )
+  )
+)
+
+plot_main_q55_age_boxplot_overall_category_base <- ggplot(
+  main_q55_age_boxplot_data,
+  aes(x = category_group, y = q55_age_value)
+) +
+  geom_boxplot(width = 0.45, outlier.alpha = 0.7) +
+  facet_wrap(~ category_group, nrow = 1) +
+  labs(
+    title = main_q55_age_question_title,
+    subtitle = main_q55_age_question_subtitle,
+    x = NULL,
+    y = "Age (years)"
+  ) +
+  theme_result() +
+  theme(
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank(),
+    plot.caption = element_blank(),
+    plot.margin = margin(10, 10, 10, 10)
+  )
+
+plot_main_q55_age_boxplot_overall_category <- gridExtra::arrangeGrob(
+  plot_main_q55_age_boxplot_overall_category_base,
+  main_q55_age_boxplot_stats_grob,
+  ncol = 1,
+  heights = c(4.8, 1.2)
+)
+
+
 
 requested_analysis_overview <- tibble(
   analysis_block = c(
@@ -2000,6 +2209,8 @@ required_export_objects <- c(
   "main_q50_summary_overall_category_table",
   "main_q51_summary_overall_category_table",
   "main_q51_boxplot_stats_table",
+  "viviq_total_score_boxplot_stats_table",
+  "main_q55_age_boxplot_stats_table",
   "main_q52_summary_overall_category_table",
   "main_q53_summary_overall_category_table",
   "requested_main_q54_multiselect_distribution",
@@ -2079,6 +2290,25 @@ ggsave(
   bg = "white"
 )
 
+
+ggsave(
+  file.path(out_requested_figures, "ReqFig7_viviq_total_score_boxplot_overall_category.png"),
+  plot_viviq_total_score_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  file.path(out_requested_figures, "ReqFig8_main_q55_age_boxplot_overall_category.png"),
+  plot_main_q55_age_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
+
 if (!is.null(plot_age_distribution)) {
   ggsave(file.path(out_extended_figures, "ExtFig1_age_distribution.png"), plot_age_distribution, width = 8, height = 5, dpi = 300)
 }
@@ -2149,6 +2379,8 @@ save_requested_table_outputs(main_q52_summary_overall_category_table, "18f_main_
 save_requested_table_outputs(main_q53_summary_overall_category_table, "18g_main_q53_summary_overall_category_table")
 save_requested_table_outputs(main_q50_boxplot_stats_table,"18h_main_q50_boxplot_stats_table")
 save_requested_table_outputs(main_q51_boxplot_stats_table,"18i_main_q51_boxplot_stats_table")
+save_requested_table_outputs(viviq_total_score_boxplot_stats_table,"18j_viviq_total_score_boxplot_stats_table")
+save_requested_table_outputs(main_q55_age_boxplot_stats_table,"18k_main_q55_age_boxplot_stats_table")
 save_requested_table_outputs(requested_main_q54_multiselect_distribution,"18_requested_main_q54_multiselect_distribution")
 save_requested_table_outputs(requested_main_q54_top3_table,"19_requested_main_q54_top3_table")
 
@@ -2186,6 +2418,8 @@ writexl::write_xlsx(
     main_q53_summary_overall_category_table = main_q53_summary_overall_category_table,
     main_q50_boxplot_stats_table = main_q50_boxplot_stats_table,
     main_q51_boxplot_stats_table = main_q51_boxplot_stats_table,
+    viviq_total_score_boxplot_stats_table = viviq_total_score_boxplot_stats_table,
+    main_q55_age_boxplot_stats_table = main_q55_age_boxplot_stats_table,
     requested_main_q54_multiselect_distribution = requested_main_q54_multiselect_distribution,
     requested_main_q54_top3_table = requested_main_q54_top3_table),
   path = file.path(out_requested_dir, "05c_requested_analysis_tables.xlsx")
@@ -2207,6 +2441,25 @@ ggsave(
 ggsave(
   file.path(out_requested_figures, "ReqFig6_main_q51_boxplot_overall_category.png"),
   plot_main_q51_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
+
+
+ggsave(
+  file.path(out_requested_figures, "ReqFig7_viviq_total_score_boxplot_overall_category.png"),
+  plot_viviq_total_score_boxplot_overall_category,
+  width = 12,
+  height = 7.2,
+  dpi = 300,
+  bg = "white"
+)
+
+ggsave(
+  file.path(out_requested_figures, "ReqFig8_main_q55_age_boxplot_overall_category.png"),
+  plot_main_q55_age_boxplot_overall_category,
   width = 12,
   height = 7.2,
   dpi = 300,
@@ -2329,6 +2582,12 @@ print(main_q50_boxplot_stats_table)
 
 cat("\n==================== MAIN Q51 BOXPLOT STATS OVERALL / ABSTRACT / CONCRETE ====================\n")
 print(main_q51_boxplot_stats_table)
+
+cat("\n==================== VIVIQ TOTAL SCORE BOXPLOT STATS OVERALL / ABSTRACT / CONCRETE ====================\n")
+print(viviq_total_score_boxplot_stats_table)
+
+cat("\n==================== MAIN Q55 AGE BOXPLOT STATS OVERALL / ABSTRACT / CONCRETE ====================\n")
+print(main_q55_age_boxplot_stats_table)
 
 #####################################################################
 ###              Wissenschaftliche Tabellen anzeigen              ###
@@ -2887,3 +3146,4 @@ gt_longitudinal_block_variable_summary_by_category_table
 #####################################################################
 ###                    Ende des Workflows                         ###
 #####################################################################
+
