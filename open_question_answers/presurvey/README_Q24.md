@@ -1,16 +1,12 @@
 # Pre_Survey_Q24 - Typical situations for using image generators
 
-**Scope:** open_text_inventory | Only respondents with Pre_Survey_Q3 == "Yes"
+**Dataset:** open_text_inventory | Only respondents with Pre_Survey_Q3 == "Yes"
 
 ## Overview
 
-This README documents an open-text inventory for `Pre_Survey_Q24`.
-
-- **Question/topic:** Pre_Survey_Q24 - Typical situations for using image generators
-- **Filtered sample:** open_text_inventory | Only respondents with Pre_Survey_Q3 == "Yes"
-- **Number of verbatim responses:** 156
-- **Columns:** `Response ID`, `Response text`, `Word count`, `Character count`
-- **Source note:** Question: Please give me an example for a typical situation in which you use GenAI for image generation. | Denominator: All non-missing verbatim responses from the filtered sample.
+- **Source file:** `q24_text_inv.html`
+- **Number of responses:** 156
+- **Columns:** Response ID, Response text, Word count, Character count
 
 ## Data
 
@@ -18,8 +14,8 @@ This README documents an open-text inventory for `Pre_Survey_Q24`.
 | --- | --- | --- | --- |
 | 1 | Thesis to create a chart about the data | 8 | 39 |
 | 2 | For university courses. For example for a presentation. | 8 | 55 |
-| 3 | Ich wollte einen persönlichen Gegenstand darstellen lassen. | 7 | 59 |
-| 4 | Starting a digital image of what I'm thinking | 8 | 45 |
+| 3 | Ich wollte einen persšnlichen Gegenstand darstellen lassen. | 7 | 59 |
+| 4 | Starting a digital image of what IÕm thinking | 8 | 45 |
 | 5 | I need a nice picture on the first slide for the teammeeting | 12 | 60 |
 | 6 | For uploading picture in social media for my page, I need to generate image. | 14 | 76 |
 | 7 | to produce 'album covers' for songs that I've written | 9 | 53 |
@@ -172,7 +168,3 @@ This README documents an open-text inventory for `Pre_Survey_Q24`.
 | 154 | A candid, high-resolution photograph of a europe tennis club celebrating playing a tournament with the team of 2 people each with Camera profesional Angle & Focus with Mood & Style Natural, soft sunlight coming from the side. The subjects are looking towards the each other, non-staged expressions. Style: Cinematic corporate photography, shot on 85mm lens, f/1.8 aperture for depth of field no blurred background, I want them in full body where I can see they with rackets . Quality: Photorealistic, 8k, highly detailed, trustworthy atmosphere, warm color grading. | 88 | 565 |
 | 155 | to generate music album art | 5 | 27 |
 | 156 | variation of one single picture to get multiple composition (other composition or variation of pictures are maybe not available and therefore i need a tool to create them) | 28 | 171 |
-
-## Notes
-
-- Question: Please give me an example for a typical situation in which you use GenAI for image generation. | Denominator: All non-missing verbatim responses from the filtered sample.
