@@ -8,3 +8,6 @@ Dieser Ordner enthält im öffentlichen Repository nur den kuratierten Master-In
 - `project_master_index/Output for Research/**/*.png`
 
 Nicht veröffentlichen: CSV, XLSX, TXT, Review-Dateien, Rohdaten, Zwischenstände oder lokale Manifeste mit sensiblen Pfaden.
+
+
+
