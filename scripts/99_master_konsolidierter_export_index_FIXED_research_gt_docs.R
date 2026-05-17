@@ -30,7 +30,7 @@
 # - dort nur jene Tabellen und Plots, die direkt für die Arbeit nutzbar sind
 # - keine Änderung an Analyse-, Tabellen- oder Plot-Methodik
 #
-# WICHTIG:
+# WICHTIG:06
 # - Dieses Skript verändert keine Analyse- oder Bereinigungslogik.
 # - Es sammelt ausschließlich bereits erzeugte Outputs.
 # - Falls einzelne Skripte noch nicht gelaufen sind, werden die Abschnitte
@@ -650,7 +650,17 @@ script_registry <- tibble::tribble(
   NA_character_,
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation"),
   file.path(project_root, "data_output", "image_agreement_lmm_analysis", "12_image_agreement_lmm_analysis_tables.xlsx"),
-  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "12_image_agreement_lmm_console_summary.txt")
+  file.path(project_root, "data_output", "image_agreement_lmm_analysis", "documentation", "12_image_agreement_lmm_console_summary.txt"),
+
+  "14", "Additional central-finding visualizations", "Zusätzliche Visualisierungen zentraler Findings: Diverging-Likert-Plots, Prompt-Coding-Verläufe und kompakte Zeit-/Change-Figuren.",
+  file.path(project_root, "data_output", "additional_visualizations_central_findings"),
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "documentation", "00_additional_visualizations_index.html"),
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "tables"),
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "figures"),
+  NA_character_,
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "documentation"),
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "tables", "14_additional_visualization_tables.xlsx"),
+  file.path(project_root, "data_output", "additional_visualizations_central_findings", "documentation", "14_additional_visualization_captions_and_notes.txt")
 )
 
 # =========================================================

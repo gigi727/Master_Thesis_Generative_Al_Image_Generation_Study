@@ -339,6 +339,7 @@ make_round_statistics_label_data <- function(
         as.character(round_factor),
         ": Median = ", purrr::map_chr(.data[[median_col]], format_plot_number, digits = digits),
         "; Mode = ", purrr::map_chr(.data[[mode_col]], format_plot_text),
+        "; Mean = ", purrr::map_chr(.data[[mean_col]], format_plot_number, digits = digits),
         "; n = ", .data[[n_col]]
       )
     )
@@ -586,18 +587,25 @@ make_fixed_round_statistics_label_data <- function(
     mean_col,
     median_col,
     mode_col = NULL,
+    q1_col = NULL,
+    q3_col = NULL,
     facet_col = NULL,
     n_col = "n",
     label_x = 2,
     label_y = -0.5,
     y_lower_limit = -1,
     digits = 2,
-    include_mode = TRUE
+    include_mode = TRUE,
+    include_iqr = FALSE
 ) {
   required_cols <- c("round", "round_factor", mean_col, median_col, n_col)
 
   if (isTRUE(include_mode)) {
     required_cols <- c(required_cols, mode_col)
+  }
+
+  if (isTRUE(include_iqr)) {
+    required_cols <- c(required_cols, q1_col, q3_col)
   }
 
   if (!is.null(facet_col)) {
@@ -619,17 +627,31 @@ make_fixed_round_statistics_label_data <- function(
   label_source <- descriptives %>%
     arrange(round) %>%
     mutate(
+      iqr_text = if (isTRUE(include_iqr)) {
+        paste0(
+          "; IQR = ",
+          purrr::map_chr(.data[[q1_col]], format_plot_number, digits = digits),
+          "–",
+          purrr::map_chr(.data[[q3_col]], format_plot_number, digits = digits)
+        )
+      } else {
+        ""
+      },
       statistics_line = if (isTRUE(include_mode)) {
         paste0(
           as.character(round_factor),
           ": Median = ", purrr::map_chr(.data[[median_col]], format_plot_number, digits = digits),
           "; Mode = ", purrr::map_chr(.data[[mode_col]], format_plot_text),
+          "; Mean = ", purrr::map_chr(.data[[mean_col]], format_plot_number, digits = digits),
+          iqr_text,
           "; n = ", .data[[n_col]]
         )
       } else {
         paste0(
           as.character(round_factor),
           ": Median = ", purrr::map_chr(.data[[median_col]], format_plot_number, digits = digits),
+          "; Mean = ", purrr::map_chr(.data[[mean_col]], format_plot_number, digits = digits),
+          iqr_text,
           "; n = ", .data[[n_col]]
         )
       }
@@ -663,6 +685,8 @@ add_fixed_round_statistics_annotation <- function(
     mean_col,
     median_col,
     mode_col = NULL,
+    q1_col = NULL,
+    q3_col = NULL,
     facet_col = NULL,
     label_x = 2,
     label_y = -0.5,
@@ -670,6 +694,7 @@ add_fixed_round_statistics_annotation <- function(
     text_size = 2.8,
     digits = 2,
     include_mode = TRUE,
+    include_iqr = FALSE,
     bottom_margin = 30
 ) {
   statistics_label_data <- make_fixed_round_statistics_label_data(
@@ -677,12 +702,15 @@ add_fixed_round_statistics_annotation <- function(
     mean_col = mean_col,
     median_col = median_col,
     mode_col = mode_col,
+    q1_col = q1_col,
+    q3_col = q3_col,
     facet_col = facet_col,
     label_x = label_x,
     label_y = label_y,
     y_lower_limit = y_lower_limit,
     digits = digits,
-    include_mode = include_mode
+    include_mode = include_mode,
+    include_iqr = include_iqr
   )
 
   plot_object +
@@ -800,12 +828,23 @@ make_ordinal_stacked_bar_plot <- function(
   )
 }
 
-median_iqr_remark_text <- paste(
-  "Remarks: Points represent medians. Vertical bars show the interquartile range (IQR),",
-  "from the 25th percentile (Q1) to the 75th percentile (Q3).",
-  "The IQR therefore contains the middle 50% of responses; it is not a standard error,",
-  "confidence interval, or significance test. Lines connect medians across rounds."
+median_iqr_remark_sentences <- c(
+  "Remarks: Points represent medians.",
+  "Vertical bars show the interquartile range (IQR): Q1 to Q3.",
+  "The IQR contains the middle 50% of responses.",
+  "It is not a standard error, confidence interval, or significance test.",
+  "Lines connect medians across rounds."
 )
+
+make_median_iqr_caption <- function(subscale_label = NULL) {
+  caption_lines <- median_iqr_remark_sentences
+
+  if (!is.null(subscale_label) && !is.na(subscale_label) && nzchar(as.character(subscale_label))) {
+    caption_lines <- c(paste0("Subscale: ", as.character(subscale_label), "."), caption_lines)
+  }
+
+  paste(caption_lines, collapse = "\n")
+}
 
 make_ordinal_median_iqr_plot <- function(
     descriptives,
@@ -816,6 +855,7 @@ make_ordinal_median_iqr_plot <- function(
     q1_col,
     q3_col,
     facet_col = NULL,
+    subscale_label = NULL,
     y_label = "Median score with IQR",
     x_label = "Image-generation round"
 ) {
@@ -849,11 +889,18 @@ make_ordinal_median_iqr_plot <- function(
       title = title_text,
       x = x_label,
       y = y_label,
-      caption = median_iqr_remark_text
+      caption = make_median_iqr_caption(subscale_label = subscale_label)
     ) +
     plot_theme +
     theme(
-      plot.caption = element_text(hjust = 0, size = 9, margin = margin(t = 12))
+      plot.caption.position = "plot",
+      plot.caption = element_text(
+        hjust = 0,
+        size = 8.5,
+        lineheight = 1.05,
+        margin = margin(t = 16, b = 8)
+      ),
+      plot.margin = margin(t = 10, r = 14, b = 22, l = 14)
     )
 
   if (!is.null(facet_col)) {
@@ -871,7 +918,10 @@ make_ordinal_median_iqr_plot <- function(
     label_y = label_y,
     y_lower_limit = y_lower_limit,
     include_mode = FALSE,
-    bottom_margin = 55
+    include_iqr = TRUE,
+    q1_col = q1_col,
+    q3_col = q3_col,
+    bottom_margin = 115
   )
 }
 
@@ -995,6 +1045,7 @@ make_ordinal_plot_suite <- function(
     q3_col,
     facet_col = NULL,
     extra_group_vars = character(),
+    subscale_label = NULL,
     score_label = "Likert response"
 ) {
   list(
@@ -1018,6 +1069,7 @@ make_ordinal_plot_suite <- function(
       q1_col = q1_col,
       q3_col = q3_col,
       facet_col = facet_col,
+      subscale_label = subscale_label,
       y_label = "Median score with IQR"
     ),
     violin_box_jitter = make_ordinal_violin_box_jitter_plot(
@@ -1694,25 +1746,80 @@ plot_theme <- if (exists("theme_result")) {
   theme_minimal()
 }
 
-# Mean-based summary plots from earlier versions are intentionally not created.
-# The median-only output below relies on ordinal distribution plots, median/IQR
-# plots and the individual trajectory plot with a median trend line.
-image_agreement_subscale_names <- image_agreement_subscale_descriptives_by_target_category %>%
-  distinct(subscale) %>%
-  arrange(subscale) %>%
-  pull(subscale)
+agreement_plot_base <- ggplot(
+  agreement_descriptives,
+  aes(x = round, y = mean_agreement)
+) +
+  geom_line() +
+  geom_point(size = 3) +
+  geom_errorbar(
+    aes(
+      ymin = mean_agreement - se_agreement,
+      ymax = mean_agreement + se_agreement
+    ),
+    width = 0.1
+  ) +
+  scale_x_continuous(
+    breaks = c(1, 2, 3),
+    labels = c("Round 1", "Round 2", "Round 3")
+  ) +
+  labs(
+    title = "Image-mental-image agreement across generation rounds",
+    x = "Image-generation round",
+    y = "Mean image-mental-image agreement"
+  ) +
+  plot_theme
+
+agreement_plot <- add_round_statistics_annotation(
+  plot_object = agreement_plot_base,
+  descriptives = agreement_descriptives,
+  mean_col = "mean_agreement",
+  median_col = "median_agreement",
+  mode_col = "mode_agreement",
+  se_col = "se_agreement"
+)
+
+agreement_plot_by_target_category <- make_target_category_round_plot(
+  descriptives = agreement_descriptives_by_target_category,
+  title_text = "Image-mental-image agreement across rounds by target word category",
+  y_label = "Mean image-mental-image agreement",
+  mean_col = "mean_agreement",
+  median_col = "median_agreement",
+  mode_col = "mode_agreement",
+  se_col = "se_agreement"
+)
+
+image_agreement_subscale_plots <- image_agreement_subscale_descriptives_by_target_category %>%
+  split(.$subscale) %>%
+  purrr::imap(
+    ~ make_target_category_round_plot(
+      descriptives = .x,
+      title_text = paste0(.y, " across rounds by target word category"),
+      y_label = paste0("Mean ", .y),
+      mean_col = "mean_score",
+      se_col = "se_score"
+    )
+  )
 
 image_agreement_subscale_figure_manifest <- tibble(
-  label = paste0("Removed mean-based image agreement ", image_agreement_subscale_names, " by target category"),
+  label = paste0("Image agreement ", names(image_agreement_subscale_plots), " by target category"),
   path = file.path(
     out_figures_dir,
     paste0(
       "AgreementSubscale_",
-      clean_filename_component(image_agreement_subscale_names),
+      clean_filename_component(names(image_agreement_subscale_plots)),
       "_by_round_by_target_category.png"
     )
   ),
-  notes = "Removed by median-only figure policy"
+  notes = "PNG-Grafik"
+)
+
+mental_image_change_plot_by_target_category <- make_target_category_round_plot(
+  descriptives = mental_image_change_descriptives_by_target_category,
+  title_text = "Change in mental image across rounds by target word category",
+  y_label = "Mean change in mental image",
+  mean_col = "mean_score",
+  se_col = "se_score"
 )
 
 agreement_ordinal_plot_variants <- make_ordinal_plot_suite(
@@ -1758,6 +1865,7 @@ image_agreement_subscale_ordinal_plot_variants <- image_agreement_subscale_long_
       q3_col = "q3_score",
       facet_col = "target_word_category_analysis",
       extra_group_vars = "subscale",
+      subscale_label = .y,
       score_label = paste0(.y, " score")
     )
   )
@@ -1790,9 +1898,13 @@ make_ordinal_registry_rows <- function(plot_list, label_prefix, file_prefix, wid
     ~ tibble(
       label = paste(label_prefix, ordinal_variant_labels[[.y]], sep = " - "),
       path = file.path(out_figures_dir, paste0(file_prefix, "_", .y, ".png")),
-      notes = "Ordinal PNG-Grafik with median, mode and n annotation",
+      notes = if_else(
+        .y == "median_iqr",
+        "Ordinal PNG-Grafik with median, mean, IQR, n annotation and IQR remark",
+        "Ordinal PNG-Grafik with median, mode, mean and n annotation"
+      ),
       width = width,
-      height = height,
+      height = if_else(.y == "median_iqr", height + 2.4, height),
       plot = list(.x)
     )
   )
@@ -1859,13 +1971,13 @@ individual_change_plot <- ggplot(
   geom_point(alpha = 0.60) +
   stat_summary(
     aes(group = 1),
-    fun = stats::median,
+    fun = mean,
     geom = "line",
     linewidth = 1.2
   ) +
   stat_summary(
     aes(group = 1),
-    fun = stats::median,
+    fun = mean,
     geom = "point",
     size = 3
   ) +
@@ -1874,7 +1986,7 @@ individual_change_plot <- ggplot(
     labels = c("Round 1", "Round 2", "Round 3")
   ) +
   labs(
-    title = "Individual agreement trajectories across rounds with median trend",
+    title = "Individual agreement trajectories across rounds",
     x = "Image-generation round",
     y = "Agreement score"
   ) +
@@ -1941,20 +2053,43 @@ writexl::write_xlsx(
 # 15) Grafiken und Modell-Summaries exportieren           ===
 # =========================================================
 
-# Median-only figure policy:
-# - Mean-based PNGs from older runs are deleted so that they cannot reappear
-#   in the local index or in "Output for Research".
-# - The exported figures below use ordinal distributions, median/IQR displays,
-#   or individual trajectories with a median trend line.
-mean_based_plot_files <- c(
+ggsave(
   file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
-  file.path(out_figures_dir, "AgreementFig1b_mean_agreement_by_round_by_target_category.png"),
-  file.path(out_figures_dir, "AgreementFig1c_mean_mental_image_change_by_round_by_target_category.png"),
-  image_agreement_subscale_figure_manifest$path
+  agreement_plot,
+  width = 9,
+  height = 7,
+  dpi = 300
 )
 
-mean_based_plot_files <- unique(mean_based_plot_files[!is.na(mean_based_plot_files) & nzchar(mean_based_plot_files)])
-unlink(mean_based_plot_files[file.exists(mean_based_plot_files)], force = TRUE)
+ggsave(
+  file.path(out_figures_dir, "AgreementFig1b_mean_agreement_by_round_by_target_category.png"),
+  agreement_plot_by_target_category,
+  width = 15,
+  height = 7.5,
+  dpi = 300
+)
+
+purrr::iwalk(
+  image_agreement_subscale_plots,
+  ~ ggsave(
+    filename = image_agreement_subscale_figure_manifest$path[
+      image_agreement_subscale_figure_manifest$label ==
+        paste0("Image agreement ", .y, " by target category")
+    ],
+    plot = .x,
+    width = 15,
+    height = 7.5,
+    dpi = 300
+  )
+)
+
+ggsave(
+  file.path(out_figures_dir, "AgreementFig1c_mean_mental_image_change_by_round_by_target_category.png"),
+  mental_image_change_plot_by_target_category,
+  width = 15,
+  height = 7.5,
+  dpi = 300
+)
 
 ggsave(
   file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
@@ -2069,6 +2204,10 @@ console_summary <- c(
   file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
   "",
   "Exported figures:",
+  file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
+  file.path(out_figures_dir, "AgreementFig1b_mean_agreement_by_round_by_target_category.png"),
+  image_agreement_subscale_figure_manifest$path,
+  file.path(out_figures_dir, "AgreementFig1c_mean_mental_image_change_by_round_by_target_category.png"),
   file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
   ordinal_figure_manifest$path,
   "",
@@ -2272,7 +2411,8 @@ table_manifest_xlsx <- tibble(
 other_manifest <- tibble(
   label = c(
     "Combined workbook",
-    "AgreementFig2 individual agreement trajectories with median trend",
+    "AgreementFig1 mean agreement by round",
+    "AgreementFig2 individual agreement trajectories",
     "Model 1 primary round-factor summary TXT",
     "Model 2 controlled Q7 summary TXT",
     "Model 3 ordinal Q7 summary TXT",
@@ -2281,6 +2421,7 @@ other_manifest <- tibble(
   ),
   path = c(
     file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"),
+    file.path(out_figures_dir, "AgreementFig1_mean_agreement_by_round.png"),
     file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"),
     file.path(out_doc_dir, "12_model1_primary_round_factor_summary.txt"),
     file.path(out_doc_dir, "12_model2_controlled_q7_summary.txt"),
@@ -2290,7 +2431,8 @@ other_manifest <- tibble(
   ),
   notes = c(
     "Kombinierte Excel-Arbeitsmappe",
-    "PNG-Grafik mit Median-Trendlinie",
+    "PNG-Grafik",
+    "PNG-Grafik",
     "LMM-Summary als TXT",
     "LMM-Summary als TXT",
     "Ordinales Modell als TXT",
@@ -2299,7 +2441,24 @@ other_manifest <- tibble(
   )
 )
 
-additional_figure_manifest <- ordinal_figure_manifest
+additional_figure_manifest <- bind_rows(
+  tibble(
+    label = c(
+      "AgreementFig1b mean agreement by round and target category",
+      "AgreementFig1c mean mental image change by round and target category"
+    ),
+    path = c(
+      file.path(out_figures_dir, "AgreementFig1b_mean_agreement_by_round_by_target_category.png"),
+      file.path(out_figures_dir, "AgreementFig1c_mean_mental_image_change_by_round_by_target_category.png")
+    ),
+    notes = c(
+      "PNG-Grafik",
+      "PNG-Grafik"
+    )
+  ),
+  image_agreement_subscale_figure_manifest,
+  ordinal_figure_manifest
+)
 
 export_manifest <- bind_rows(
   table_manifest_csv,
@@ -2326,9 +2485,10 @@ if (exists("build_general_export_index")) {
 message("Confirmation: Final unified image agreement analysis was exported successfully.")
 message("Tables: ", out_tables_dir)
 message("Figures: ", out_figures_dir)
-message("Mean-based figures removed/skipped: ", paste(mean_based_plot_files, collapse = "; "))
-message("Individual trajectory figure uses a median trend line: ", file.path(out_figures_dir, "AgreementFig2_individual_agreement_trajectories.png"))
-message("Ordinal/median figure variants: ", paste(ordinal_figure_manifest$path, collapse = "; "))
+message("Additional target-category figure: ", file.path(out_figures_dir, "AgreementFig1b_mean_agreement_by_round_by_target_category.png"))
+message("Additional mental-image-change figure: ", file.path(out_figures_dir, "AgreementFig1c_mean_mental_image_change_by_round_by_target_category.png"))
+message("Additional subscale figures: ", paste(image_agreement_subscale_figure_manifest$path, collapse = "; "))
+message("Ordinal figure variants: ", paste(ordinal_figure_manifest$path, collapse = "; "))
 message("Workbook: ", file.path(out_base_dir, "12_image_agreement_final_unified_tables.xlsx"))
 message("Local index: ", file.path(out_doc_dir, "00_export_index.html"))
 message("Console summary: ", file.path(out_doc_dir, "12_image_agreement_final_unified_console_summary.txt"))
